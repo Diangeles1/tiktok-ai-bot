@@ -106,6 +106,13 @@ captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
   bottom_margin: 420    # distancia da legenda ate a base, em px (a interface do TikTok cobre o rodape)
 
+# Capa do video (so o YouTube aceita capa customizada; o TikTok usa um quadro
+# do proprio video). Exige canal verificado por telefone: se nao estiver, o bot
+# avisa e segue, sem perder a publicacao.
+thumbnail:
+  enabled: true
+  max_lines: 3    # em quantas linhas o texto de impacto pode ser quebrado
+
 sfx:
   laugh_enabled: false     # risada de grupo no fim (assets/laughs/*.mp3). Combina com humor, nao com historia seria
   laugh_gap_seconds: 0.4   # pausa entre o fim da narracao e o inicio da risada

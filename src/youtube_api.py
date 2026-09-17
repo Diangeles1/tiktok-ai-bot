@@ -38,7 +38,8 @@ def _build_client(client_id: str, client_secret: str, refresh_token: str):
 def upload_short(client_id: str, client_secret: str, refresh_token: str,
                   video_path: str, title: str, description: str,
                   category_id: str = "24", privacy_status: str = "public",
-                  made_for_kids: bool = False) -> dict:
+                  made_for_kids: bool = False,
+                  thumbnail_path: str | None = None) -> dict:
     """Envia o video como YouTube Short. Retorna o recurso 'video' criado."""
     youtube = _build_client(client_id, client_secret, refresh_token)
 
@@ -81,5 +82,19 @@ def upload_short(client_id: str, client_secret: str, refresh_token: str,
 
         if status:
             print(f"  [youtube] upload {int(status.progress() * 100)}%")
+
+    if thumbnail_path:
+        # o video ja esta publicado neste ponto: capa customizada exige canal
+        # verificado por telefone, entao uma falha aqui nao pode derrubar a
+        # execucao e perder a publicacao do dia
+        try:
+            youtube.thumbnails().set(
+                videoId=response["id"],
+                media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg"),
+            ).execute()
+            print("  [youtube] capa enviada")
+        except HttpError as exc:
+            print(f"  [youtube] AVISO: nao foi possivel definir a capa ({exc}). "
+                  f"Capa customizada exige canal verificado por telefone.")
 
     return response
