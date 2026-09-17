@@ -1,30 +1,44 @@
-"""Montagem do video final (imagens + narracao) com MoviePy/ffmpeg."""
+"""Montagem do video final: imagem fixa do personagem (com leve zoom/Ken Burns)
++ narracao + legendas animadas palavra por palavra, via MoviePy/ffmpeg."""
 import os
 
-from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+from moviepy.editor import AudioFileClip, CompositeVideoClip, ImageClip
+
+from src.captions import build_chunks, render_caption_png
 
 
-def build_video(scene_image_paths: list[str], scene_audio_paths: list[str],
-                 width: int, height: int, fps: int, out_path: str) -> str:
-    assert len(scene_image_paths) == len(scene_audio_paths)
+def _ken_burns(clip, duration: float, zoom_end: float = 1.12):
+    return clip.resize(lambda t: 1 + (zoom_end - 1) * (t / duration))
 
-    clips = []
-    for img_path, audio_path in zip(scene_image_paths, scene_audio_paths):
-        audio_clip = AudioFileClip(audio_path)
-        # pequena folga no final da cena para nao cortar a narracao em seco
-        duration = audio_clip.duration + 0.35
-        img_clip = (
-            ImageClip(img_path)
-            .resize(height=height)
-            .set_position("center")
-            .set_duration(duration)
-            .set_audio(audio_clip)
+
+def build_video(character_image_path: str, audio_path: str, word_timings: list[dict],
+                 width: int, height: int, fps: int, out_path: str,
+                 words_per_chunk: int = 3, zoom_effect: bool = True,
+                 tmp_dir: str = "output/_captions") -> str:
+    audio_clip = AudioFileClip(audio_path)
+    duration = audio_clip.duration
+
+    bg = ImageClip(character_image_path).resize(height=height).set_duration(duration)
+    if zoom_effect:
+        bg = _ken_burns(bg, duration)
+    bg = bg.set_position("center")
+
+    caption_clips = []
+    os.makedirs(tmp_dir, exist_ok=True)
+    for i, chunk in enumerate(build_chunks(word_timings, words_per_chunk)):
+        png_path, png_height = render_caption_png(chunk["text"], width, f"{tmp_dir}/cap_{i}.png")
+        clip_duration = max(0.05, chunk["end"] - chunk["start"])
+        caption_clip = (
+            ImageClip(png_path)
+            .set_start(chunk["start"])
+            .set_duration(clip_duration)
+            .set_position(("center", height - png_height - 260))
         )
-        # garante exatamente width x height (crop/letterbox se a proporcao nao bater)
-        img_clip = img_clip.on_color(size=(width, height), color=(0, 0, 0), pos="center")
-        clips.append(img_clip)
+        caption_clips.append(caption_clip)
 
-    final = concatenate_videoclips(clips, method="compose")
+    final = CompositeVideoClip([bg] + caption_clips, size=(width, height)).set_audio(audio_clip)
+    final = final.set_duration(duration)
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     final.write_videofile(
         out_path,
@@ -36,8 +50,9 @@ def build_video(scene_image_paths: list[str], scene_audio_paths: list[str],
         logger=None,
     )
 
-    for c in clips:
-        c.close()
     final.close()
+    bg.close()
+    for c in caption_clips:
+        c.close()
 
     return out_path

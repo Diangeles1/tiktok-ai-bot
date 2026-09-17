@@ -1,20 +1,18 @@
-"""Geracao de imagens via Pollinations.ai (gratuito, sem chave de API)
-e composicao da legenda (burned-in caption) com Pillow."""
+"""Geracao de imagens via Pollinations.ai (gratuito, sem chave de API)."""
 import os
 import random
-import textwrap
 import time
 import urllib.parse
 
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import ImageFont
 
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
 
 
 def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
                           seed: int | None = None, retries: int = 4) -> str:
-    """Baixa uma imagem gerada por IA para a cena. Retorna o caminho do arquivo.
+    """Baixa uma imagem gerada por IA. Retorna o caminho do arquivo.
 
     O servico gratuito da Pollinations.ai ocasionalmente responde 500/503 sob
     carga; como o bot roda sem supervisao, tentamos novamente com backoff."""
@@ -47,7 +45,7 @@ def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
     raise RuntimeError(f"Nao foi possivel gerar a imagem apos {retries} tentativas: {last_exc}")
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
+def load_font(size: int) -> ImageFont.FreeTypeFont:
     candidates = [
         "C:/Windows/Fonts/arialbd.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -57,32 +55,3 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
     return ImageFont.load_default()
-
-
-def burn_caption(image_path: str, caption: str, out_path: str) -> str:
-    """Sobrepoe o texto da cena na parte inferior da imagem (estilo legenda TikTok)."""
-    img = Image.open(image_path).convert("RGB")
-    draw = ImageDraw.Draw(img, "RGBA")
-
-    font_size = max(28, img.width // 18)
-    font = _load_font(font_size)
-
-    wrapped = textwrap.fill(caption, width=22)
-    lines = wrapped.split("\n")
-
-    line_height = font_size + 10
-    block_height = line_height * len(lines) + 60
-    box_top = img.height - block_height - 140  # espaco para nao cobrir a UI do TikTok
-    draw.rectangle([0, box_top, img.width, box_top + block_height], fill=(0, 0, 0, 140))
-
-    y = box_top + 30
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
-        text_w = bbox[2] - bbox[0]
-        x = (img.width - text_w) / 2
-        draw.text((x, y), line, font=font, fill=(255, 255, 255, 255),
-                   stroke_width=2, stroke_fill=(0, 0, 0, 255))
-        y += line_height
-
-    img.save(out_path)
-    return out_path
