@@ -12,6 +12,13 @@ MAX_ATTEMPTS = 3
 MIN_SCENES = 8
 MAX_SCENES = 14
 
+# O gpt-oss e um modelo de raciocinio. No esforco padrao ele gasta o orcamento
+# de tokens raciocinando e o modo JSON falha com "Failed to generate JSON";
+# medido: com esforco baixo o roteiro sai igual e gasta cinco vezes menos token.
+# Troque para None se mudar para um modelo que nao aceite este parametro.
+REASONING_EFFORT = "low"
+MAX_COMPLETION_TOKENS = 8000
+
 PROMPT_TEMPLATE = """Voce e um roteirista de esquetes curtas de humor para TikTok/YouTube Shorts,
 estreladas por um personagem fixo chamado "{character_name}".
 Sobre o personagem: {character_vibe}
@@ -82,6 +89,23 @@ Responda APENAS com um JSON valido no formato:
 """
 
 
+def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
+    """Pede o roteiro em JSON e devolve o dict. Ver REASONING_EFFORT: sem ele o
+    modo JSON deste modelo falha."""
+    params = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.95,
+        "response_format": {"type": "json_object"},
+        "max_tokens": MAX_COMPLETION_TOKENS,
+    }
+    if REASONING_EFFORT:
+        params["reasoning_effort"] = REASONING_EFFORT
+
+    content = client.chat.completions.create(**params).choices[0].message.content
+    return json.loads(content)
+
+
 def _request_scene_script(client: Groq, model: str, niche: str, language: str,
                            min_words: int, max_words: int, seed_topic: str | None,
                            extra_rules: str | None = None) -> dict:
@@ -96,19 +120,11 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
     else:
         prompt += f"\nEvite temas obvios/repetidos. Semente aleatoria: {random.randint(1, 999999)}\n"
 
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.95,
-        response_format={"type": "json_object"},
-    )
-
-    content = completion.choices[0].message.content
-    data = json.loads(content)
+    data = _ask_for_json(client, model, prompt)
 
     scenes = data.get("scenes")
     if not scenes or not isinstance(scenes, list):
-        raise ValueError(f"Resposta do LLM sem lista de cenas: {content}")
+        raise ValueError(f"Resposta do LLM sem lista de cenas: {data}")
     for scene in scenes:
         if not scene.get("narration") or not scene.get("visual"):
             raise ValueError(f"Cena incompleta na resposta do LLM: {scene}")
@@ -170,18 +186,10 @@ def _request_script(client: Groq, model: str, character_name: str, character_vib
     else:
         prompt += f"\nEvite temas obvios/repetidos. Semente aleatoria: {random.randint(1, 999999)}\n"
 
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.95,
-        response_format={"type": "json_object"},
-    )
-
-    content = completion.choices[0].message.content
-    data = json.loads(content)
+    data = _ask_for_json(client, model, prompt)
 
     if not data.get("narration"):
-        raise ValueError(f"Resposta do LLM sem narracao valida: {content}")
+        raise ValueError(f"Resposta do LLM sem narracao valida: {data}")
 
     return data
 

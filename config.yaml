@@ -48,7 +48,11 @@ video:
 
 script:
   model: "openai/gpt-oss-120b"   # modelo da Groq usado para escrever o roteiro
-  min_narration_words: 170       # abaixo disso o roteiro e gerado de novo (video precisa passar de 1 min)
+  # Abaixo disso o roteiro e gerado de novo, porque o video precisa passar de
+  # 1 minuto para a monetizacao. Calibrado com medicao real: a voz Antonio le
+  # 2,42 palavras por segundo, entao 155 palavras dao cerca de 64s, com folga.
+  # Exigir 170 pedia 70s e queimava tentativas de LLM sem necessidade.
+  min_narration_words: 155
   max_narration_words: 220
 
   # Regras extras coladas no prompt do roteiro. Aqui ficam as travas que este

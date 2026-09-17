@@ -91,7 +91,12 @@ def main() -> None:
     total = scenes_mod.render_narration(
         scenes, cfg["tts_voice"], os.path.join(run_dir, "narration"), gap=scene_gap,
     )
+    # a contagem de palavras do roteiro e so uma estimativa; a duracao do audio
+    # e o numero que decide se o video se qualifica para a monetizacao
     print(f"  Narracao de {total:.1f}s")
+    if total < 60:
+        print("  AVISO: abaixo de 1 minuto, nao qualifica para o TikTok Creator Rewards. "
+              "Aumente script.min_narration_words no config.yaml.")
 
     print("[4/5] Montando o video final")
     video_path = os.path.join(run_dir, "final.mp4")
