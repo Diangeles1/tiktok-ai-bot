@@ -73,6 +73,7 @@ Responda APENAS com um JSON valido no formato:
 {{
   "topic": "assunto especifico do video de hoje",
   "caption": "legenda curta e chamativa (max 150 caracteres)",
+  "thumbnail": "3 a 6 palavras de impacto para a capa, em caixa alta",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4"],
   "scenes": [
     {{"narration": "trecho narrado desta cena", "visual": "image prompt in English"}}

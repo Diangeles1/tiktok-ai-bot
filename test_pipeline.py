@@ -5,7 +5,7 @@ import os
 
 import yaml
 
-from src import scenes as scenes_mod, sfx, video
+from src import scenes as scenes_mod, sfx, thumbnail, video
 
 with open("config.yaml", "r", encoding="utf-8") as f:
     cfg = yaml.safe_load(f)
@@ -79,3 +79,15 @@ out = video.build_video(
     crossfade=cfg["video"].get("crossfade_seconds", 0.4),
 )
 print(f"OK -> {out} ({os.path.getsize(out) / 1024:.1f} KB)")
+
+thumb_cfg = cfg.get("thumbnail", {})
+if thumb_cfg.get("enabled", True):
+    print("Gerando a capa...")
+    cover = thumbnail.build_thumbnail(
+        scene_image=FAKE_SCENES[0]["image"],
+        text="TODOS RIRAM ATE A CHUVA CHEGAR",
+        width=width, height=height,
+        out_path=f"{run_dir}/thumbnail.jpg",
+        max_lines=thumb_cfg.get("max_lines", 3),
+    )
+    print(f"OK -> {cover} ({os.path.getsize(cover) / 1024:.1f} KB)")

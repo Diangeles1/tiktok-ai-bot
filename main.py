@@ -12,7 +12,7 @@ import os
 import yaml
 
 from src import (character, github_secrets, scenes as scenes_mod, script_gen, sfx,
-                 tiktok_api, video, youtube_api)
+                 thumbnail, tiktok_api, video, youtube_api)
 
 OUTPUT_DIR = "output"
 
@@ -93,7 +93,7 @@ def main() -> None:
     )
     print(f"  Narracao de {total:.1f}s")
 
-    print("[4/4] Montando o video final")
+    print("[4/5] Montando o video final")
     video_path = os.path.join(run_dir, "final.mp4")
     sfx_cfg = cfg.get("sfx", {})
     captions_cfg = cfg.get("captions", {})
@@ -110,17 +110,30 @@ def main() -> None:
         crossfade=cfg["video"].get("crossfade_seconds", 0.4),
     )
 
+    thumb_cfg = cfg.get("thumbnail", {})
+    thumbnail_path = None
+    if thumb_cfg.get("enabled", True):
+        cover_text = script.get("thumbnail") or script.get("topic", "")
+        thumbnail_path = thumbnail.build_thumbnail(
+            scene_image=scenes[0]["image"],
+            text=cover_text,
+            width=width, height=height,
+            out_path=os.path.join(run_dir, "thumbnail.jpg"),
+            max_lines=thumb_cfg.get("max_lines", 3),
+        )
+        print(f"  Capa: \"{cover_text}\"")
+
     hashtags = " ".join(script.get("hashtags", []) + cfg.get("hashtags_extra", []))
     title = f"{script['caption']} {hashtags}".strip()
     description = f"{script['caption']}\n\n{script.get('topic', '')}\n\n{hashtags}".strip()
 
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
     if dry_run:
-        print(f"[4/4] DRY_RUN=true — pulando publicacao. Video pronto em: {video_path}")
+        print(f"[5/5] DRY_RUN=true, pulando publicacao. Video pronto em: {video_path}")
         print(f"  Titulo que seria usado: {title}")
         return
 
-    print("[4/4] Publicando")
+    print("[5/5] Publicando")
     tiktok_cfg = cfg.get("tiktok", {})
     youtube_cfg = cfg.get("youtube", {})
 
@@ -134,7 +147,7 @@ def main() -> None:
 
     if youtube_cfg.get("enabled", True):
         try:
-            _post_to_youtube(video_path, title, description, youtube_cfg)
+            _post_to_youtube(video_path, title, description, youtube_cfg, thumbnail_path)
         except Exception as exc:
             print(f"  [youtube] FALHOU: {exc}")
     else:
@@ -167,7 +180,8 @@ def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict) -> None:
           f"status={result['status'].get('status')})")
 
 
-def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict) -> None:
+def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict,
+                      thumbnail_path: str | None = None) -> None:
     print("  [youtube] publicando...")
     result = youtube_api.upload_short(
         client_id=os.environ["YOUTUBE_CLIENT_ID"],
@@ -179,6 +193,7 @@ def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg:
         category_id=youtube_cfg.get("category_id", "24"),
         privacy_status=youtube_cfg.get("privacy_status", "public"),
         made_for_kids=youtube_cfg.get("made_for_kids", False),
+        thumbnail_path=thumbnail_path,
     )
     print(f"  [youtube] video publicado: https://youtube.com/shorts/{result['id']}")
 
