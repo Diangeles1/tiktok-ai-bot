@@ -14,6 +14,7 @@ pela auditoria da TikTok, "PUBLIC_TO_EVERYONE" passa a ficar disponivel.
 """
 import os
 import time
+from typing import Callable
 
 import requests
 
@@ -117,16 +118,27 @@ def poll_status(access_token: str, publish_id: str, timeout_s: int = 180) -> dic
 
 
 def post_video(client_key: str, client_secret: str, refresh_token: str,
-                video_path: str, title: str, privacy_level: str = "SELF_ONLY") -> dict:
-    """Fluxo completo. Retorna dict com access_token/refresh_token atualizados e o status final."""
+                video_path: str, title: str, privacy_level: str = "SELF_ONLY",
+                on_token_refreshed: Callable[[str], None] | None = None) -> dict:
+    """Fluxo completo. Retorna dict com o refresh_token atualizado e o status final.
+
+    `on_token_refreshed` e chamado assim que o token novo chega, antes do upload:
+    o TikTok invalida o refresh_token antigo na renovacao, entao se o envio
+    falhasse antes de persistirmos o valor novo, o bot ficaria travado com um
+    token morto e exigiria refazer o OAuth na mao."""
     token_data = refresh_access_token(client_key, client_secret, refresh_token)
     access_token = token_data["access_token"]
-    new_refresh_token = token_data["refresh_token"]
+    new_refresh_token = token_data.get("refresh_token", refresh_token)
+    if on_token_refreshed:
+        on_token_refreshed(new_refresh_token)
 
     video_size = os.path.getsize(video_path)
     init_data = init_video_post(access_token, video_size, title, privacy_level)
     upload_video(init_data["upload_url"], video_path)
     status = poll_status(access_token, init_data["publish_id"])
+
+    if status.get("status") == "FAILED":
+        raise RuntimeError(f"TikTok recusou a publicacao: {status}")
 
     return {
         "new_refresh_token": new_refresh_token,

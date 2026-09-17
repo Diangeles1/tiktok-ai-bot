@@ -4,7 +4,7 @@ import os
 
 import yaml
 
-from src import character, tts, video
+from src import character, sfx, tts, video
 
 with open("config.yaml", "r", encoding="utf-8") as f:
     cfg = yaml.safe_load(f)
@@ -29,9 +29,13 @@ audio_path, timings = tts.synthesize_with_timings(FAKE_NARRATION, cfg["tts_voice
 print(f"  {len(timings)} palavras, audio: {audio_path}")
 
 print("Montando video final...")
+sfx_cfg = cfg.get("sfx", {})
+laugh_path = sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None
 out = video.build_video(
     char_path, audio_path, timings, width, height, cfg["video"]["fps"], f"{run_dir}/final.mp4",
     words_per_chunk=cfg["captions"]["words_per_chunk"], zoom_effect=cfg["video"]["zoom_effect"],
     tmp_dir=f"{run_dir}/_captions",
+    laugh_path=laugh_path, laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
+    caption_bottom_margin=cfg["captions"].get("bottom_margin", 420),
 )
 print(f"OK -> {out} ({os.path.getsize(out) / 1024:.1f} KB)")

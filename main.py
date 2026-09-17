@@ -7,7 +7,7 @@ import os
 
 import yaml
 
-from src import character, github_secrets, script_gen, tiktok_api, tts, video, youtube_api
+from src import character, github_secrets, script_gen, sfx, tiktok_api, tts, video, youtube_api
 
 OUTPUT_DIR = "output"
 
@@ -26,28 +26,37 @@ def main() -> None:
     width, height = cfg["video"]["width"], cfg["video"]["height"]
     character_image_path = character.ensure_character_image(cfg["character"], width, height)
 
+    script_cfg = cfg.get("script", {})
     print(f"[1/4] Gerando roteiro da esquete de: {cfg['character']['name']}")
     script = script_gen.generate_script(
         character_name=cfg["character"]["name"],
         character_vibe=cfg["character"]["description"],
         niche=cfg["niche"],
         language=cfg["language"],
+        model=script_cfg.get("model", script_gen.MODEL),
+        min_words=script_cfg.get("min_narration_words", script_gen.MIN_NARRATION_WORDS),
     )
-    print(f"  Tema de hoje: {script['topic']}")
+    print(f"  Tema de hoje: {script['topic']} ({len(script['narration'].split())} palavras)")
 
     print("[2/4] Gerando narracao (com timing de cada palavra)")
     audio_path, word_timings = tts.synthesize_with_timings(
         script["narration"], cfg["tts_voice"], os.path.join(run_dir, "narration.mp3"),
     )
 
-    print("[3/4] Montando o video final (personagem + zoom + legendas)")
+    print("[3/4] Montando o video final (personagem + zoom + legendas + risada)")
     video_path = os.path.join(run_dir, "final.mp4")
+    sfx_cfg = cfg.get("sfx", {})
+    captions_cfg = cfg.get("captions", {})
+    laugh_path = sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None
     video.build_video(
         character_image_path, audio_path, word_timings,
         width, height, cfg["video"]["fps"], video_path,
-        words_per_chunk=cfg.get("captions", {}).get("words_per_chunk", 3),
+        words_per_chunk=captions_cfg.get("words_per_chunk", 3),
         zoom_effect=cfg["video"].get("zoom_effect", True),
         tmp_dir=os.path.join(run_dir, "_captions"),
+        laugh_path=laugh_path,
+        laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
+        caption_bottom_margin=captions_cfg.get("bottom_margin", 420),
     )
 
     hashtags = " ".join(script.get("hashtags", []) + cfg.get("hashtags_extra", []))
@@ -81,6 +90,17 @@ def main() -> None:
         print("  [youtube] desabilitado em config.yaml, pulando")
 
 
+def _save_tiktok_refresh_token(new_token: str) -> None:
+    gh_pat = os.environ.get("GH_PAT")
+    gh_repo = os.environ.get("GH_REPOSITORY")
+    if gh_pat and gh_repo:
+        github_secrets.update_repo_secret(gh_pat, gh_repo, "TIKTOK_REFRESH_TOKEN", new_token)
+        print("  [tiktok] TIKTOK_REFRESH_TOKEN atualizado no GitHub.")
+    else:
+        print("  [tiktok] AVISO: GH_PAT/GH_REPOSITORY nao configurados. O novo refresh_token "
+              "NAO foi salvo e a proxima execucao vai falhar. Configure esses secrets.")
+
+
 def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict) -> None:
     print("  [tiktok] publicando...")
     result = tiktok_api.post_video(
@@ -90,18 +110,10 @@ def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict) -> None:
         video_path=video_path,
         title=title,
         privacy_level=tiktok_cfg.get("privacy_level", "SELF_ONLY"),
+        on_token_refreshed=_save_tiktok_refresh_token,
     )
-    print(f"  [tiktok] status: {result['status']}")
-
-    # o refresh_token do TikTok pode rotacionar a cada uso — persiste o novo valor
-    gh_pat = os.environ.get("GH_PAT")
-    gh_repo = os.environ.get("GH_REPOSITORY")
-    if gh_pat and gh_repo:
-        github_secrets.update_repo_secret(gh_pat, gh_repo, "TIKTOK_REFRESH_TOKEN", result["new_refresh_token"])
-        print("  [tiktok] TIKTOK_REFRESH_TOKEN atualizado no GitHub.")
-    else:
-        print("  [tiktok] AVISO: GH_PAT/GH_REPOSITORY nao configurados — o novo refresh_token "
-              "NAO foi salvo. A proxima execucao vai falhar. Configure esses secrets.")
+    print(f"  [tiktok] publicado (publish_id={result['publish_id']}, "
+          f"status={result['status'].get('status')})")
 
 
 def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict) -> None:

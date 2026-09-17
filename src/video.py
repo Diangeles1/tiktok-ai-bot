@@ -2,7 +2,7 @@
 + narracao + legendas animadas palavra por palavra, via MoviePy/ffmpeg."""
 import os
 
-from moviepy.editor import AudioFileClip, CompositeVideoClip, ImageClip
+from moviepy.editor import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ImageClip
 
 from src.captions import build_chunks, render_caption_png
 
@@ -14,9 +14,19 @@ def _ken_burns(clip, duration: float, zoom_end: float = 1.12):
 def build_video(character_image_path: str, audio_path: str, word_timings: list[dict],
                  width: int, height: int, fps: int, out_path: str,
                  words_per_chunk: int = 3, zoom_effect: bool = True,
-                 tmp_dir: str = "output/_captions") -> str:
-    audio_clip = AudioFileClip(audio_path)
-    duration = audio_clip.duration
+                 tmp_dir: str = "output/_captions",
+                 laugh_path: str | None = None, laugh_gap: float = 0.4,
+                 caption_bottom_margin: int = 420) -> str:
+    narration_clip = AudioFileClip(audio_path)
+    narration_duration = narration_clip.duration
+
+    if laugh_path:
+        laugh_clip = AudioFileClip(laugh_path).set_start(narration_duration + laugh_gap)
+        audio_clip = CompositeAudioClip([narration_clip, laugh_clip])
+        duration = narration_duration + laugh_gap + laugh_clip.duration
+    else:
+        audio_clip = narration_clip
+        duration = narration_duration
 
     bg = ImageClip(character_image_path).resize(height=height).set_duration(duration)
     if zoom_effect:
@@ -32,7 +42,7 @@ def build_video(character_image_path: str, audio_path: str, word_timings: list[d
             ImageClip(png_path)
             .set_start(chunk["start"])
             .set_duration(clip_duration)
-            .set_position(("center", height - png_height - 260))
+            .set_position(("center", height - png_height - caption_bottom_margin))
         )
         caption_clips.append(caption_clip)
 
@@ -52,6 +62,7 @@ def build_video(character_image_path: str, audio_path: str, word_timings: list[d
 
     final.close()
     bg.close()
+    narration_clip.close()
     for c in caption_clips:
         c.close()
 

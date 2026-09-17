@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 350" width="920" height="350" role="img" aria-label="Fluxo do pipeline: Pollinations gera o personagem, Groq escreve o roteiro, edge-tts narra, MoviePy monta o video, e a publicacao vai para TikTok e YouTube Shorts">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
+    </marker>
+    <style>
+      .t  { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 700; font-size: 19px; fill: #ffffff; }
+      .s  { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 400; font-size: 13px; fill: #ffffff; opacity: .85; }
+      .n  { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 700; font-size: 12px; fill: #ffffff; opacity: .75; }
+      .cap{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 600; font-size: 13px; fill: #8b949e; }
+      .ln { stroke: #8b949e; stroke-width: 2.5; fill: none; }
+    </style>
+  </defs>
+
+  <!-- etapa 1: imagem do personagem -->
+  <rect x="10" y="50" width="195" height="86" rx="14" fill="#7c5cff"/>
+  <text class="n" x="26" y="74">1</text>
+  <text class="t" x="26" y="97">Pollinations.ai</text>
+  <text class="s" x="26" y="118">personagem fixo (1x so)</text>
+
+  <!-- etapa 2: roteiro -->
+  <rect x="245" y="50" width="195" height="86" rx="14" fill="#f55036"/>
+  <text class="n" x="261" y="74">2</text>
+  <text class="t" x="261" y="97">Groq</text>
+  <text class="s" x="261" y="118">roteiro da esquete</text>
+
+  <!-- etapa 3: narracao -->
+  <rect x="480" y="50" width="195" height="86" rx="14" fill="#0f9d58"/>
+  <text class="n" x="496" y="74">3</text>
+  <text class="t" x="496" y="97">edge-tts</text>
+  <text class="s" x="496" y="118">narracao + timing</text>
+
+  <!-- etapa 4: montagem -->
+  <rect x="715" y="50" width="195" height="86" rx="14" fill="#2b7fff"/>
+  <text class="n" x="731" y="74">4</text>
+  <text class="t" x="731" y="97">MoviePy</text>
+  <text class="s" x="731" y="118">legendas + risada</text>
+
+  <!-- setas entre as etapas -->
+  <line class="ln" x1="211" y1="93" x2="238" y2="93" marker-end="url(#arrow)"/>
+  <line class="ln" x1="446" y1="93" x2="473" y2="93" marker-end="url(#arrow)"/>
+  <line class="ln" x1="681" y1="93" x2="708" y2="93" marker-end="url(#arrow)"/>
+
+  <!-- ramificacao para as duas plataformas -->
+  <path class="ln" d="M 812 140 L 812 196 L 340 196 L 340 232" marker-end="url(#arrow)"/>
+  <path class="ln" d="M 812 196 L 580 196 L 580 232" marker-end="url(#arrow)"/>
+  <text class="cap" x="836" y="176">publica</text>
+
+  <!-- destinos -->
+  <rect x="250" y="240" width="180" height="72" rx="14" fill="#1f2937" stroke="#00f2ea" stroke-width="2"/>
+  <text class="t" x="270" y="272">TikTok</text>
+  <text class="s" x="270" y="293">Content Posting API</text>
+
+  <rect x="490" y="240" width="180" height="72" rx="14" fill="#ff0000"/>
+  <text class="t" x="510" y="272">YouTube</text>
+  <text class="s" x="510" y="293">Data API v3 (Shorts)</text>
+
+  <text class="cap" x="10" y="27">Executado 1x por dia via GitHub Actions</text>
+</svg>
