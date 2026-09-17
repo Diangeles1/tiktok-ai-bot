@@ -1,13 +1,13 @@
-"""Orquestrador: gera o roteiro, a narracao, as imagens, monta o video
-e publica no TikTok e no YouTube Shorts. Pensado para rodar 1x/dia via
-GitHub Actions. Cada plataforma e independente: se uma falhar, a outra
-ainda e tentada."""
+"""Orquestrador: gera o roteiro da esquete, a narracao com timing de palavras,
+monta o video (personagem fixo + zoom + legendas animadas) e publica no
+TikTok e no YouTube Shorts. Pensado para rodar 1x/dia via GitHub Actions.
+Cada plataforma e independente: se uma falhar, a outra ainda e tentada."""
 import datetime
 import os
 
 import yaml
 
-from src import github_secrets, images, script_gen, tiktok_api, tts, video, youtube_api
+from src import character, github_secrets, script_gen, tiktok_api, tts, video, youtube_api
 
 OUTPUT_DIR = "output"
 
@@ -23,35 +23,31 @@ def main() -> None:
     run_dir = os.path.join(OUTPUT_DIR, today)
     os.makedirs(run_dir, exist_ok=True)
 
-    print(f"[1/4] Gerando roteiro sobre: {cfg['niche']}")
+    width, height = cfg["video"]["width"], cfg["video"]["height"]
+    character_image_path = character.ensure_character_image(cfg["character"], width, height)
+
+    print(f"[1/4] Gerando roteiro da esquete de: {cfg['character']['name']}")
     script = script_gen.generate_script(
+        character_name=cfg["character"]["name"],
+        character_vibe=cfg["character"]["description"],
         niche=cfg["niche"],
         language=cfg["language"],
-        n_scenes=cfg["video"]["scenes"],
     )
     print(f"  Tema de hoje: {script['topic']}")
 
-    print("[2/4] Gerando narracao e imagens de cada cena")
-    width, height = cfg["video"]["width"], cfg["video"]["height"]
-    scene_image_paths, scene_audio_paths = [], []
+    print("[2/4] Gerando narracao (com timing de cada palavra)")
+    audio_path, word_timings = tts.synthesize_with_timings(
+        script["narration"], cfg["tts_voice"], os.path.join(run_dir, "narration.mp3"),
+    )
 
-    for i, scene in enumerate(script["scenes"]):
-        audio_path = os.path.join(run_dir, f"scene_{i}.mp3")
-        tts.synthesize_scene_audio(scene["text"], cfg["tts_voice"], audio_path)
-        scene_audio_paths.append(audio_path)
-
-        raw_img_path = os.path.join(run_dir, f"scene_{i}_raw.jpg")
-        images.generate_scene_image(scene["image_prompt"], width, height, raw_img_path)
-
-        final_img_path = os.path.join(run_dir, f"scene_{i}.jpg")
-        images.burn_caption(raw_img_path, scene["text"], final_img_path)
-        scene_image_paths.append(final_img_path)
-
-    print("[3/4] Montando o video final")
+    print("[3/4] Montando o video final (personagem + zoom + legendas)")
     video_path = os.path.join(run_dir, "final.mp4")
     video.build_video(
-        scene_image_paths, scene_audio_paths,
+        character_image_path, audio_path, word_timings,
         width, height, cfg["video"]["fps"], video_path,
+        words_per_chunk=cfg.get("captions", {}).get("words_per_chunk", 3),
+        zoom_effect=cfg["video"].get("zoom_effect", True),
+        tmp_dir=os.path.join(run_dir, "_captions"),
     )
 
     hashtags = " ".join(script.get("hashtags", []) + cfg.get("hashtags_extra", []))
@@ -83,13 +79,6 @@ def main() -> None:
             print(f"  [youtube] FALHOU: {exc}")
     else:
         print("  [youtube] desabilitado em config.yaml, pulando")
-
-    # limpa arquivos intermediarios grandes, mantem so o video final
-    for p in scene_image_paths + scene_audio_paths:
-        try:
-            os.remove(p)
-        except OSError:
-            pass
 
 
 def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict) -> None:

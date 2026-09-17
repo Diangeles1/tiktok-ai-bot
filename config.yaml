@@ -1,15 +1,31 @@
 # Configuracao do conteudo gerado diariamente.
-# Edite "niche" para mudar o tema do canal.
 
-niche: "curiosidades e fatos cientificos surpreendentes"
 language: "pt-BR"
-tts_voice: "pt-BR-FranciscaNeural"   # rode `edge-tts --list-voices` para ver outras opcoes pt-BR
+tts_voice: "pt-BR-AntonioNeural"   # rode `edge-tts --list-voices` para ver outras opcoes pt-BR
+
+# Personagem original fixo do canal. A imagem e gerada UMA vez
+# (python -m src.generate_character) e reaproveitada em todo video, pra manter
+# a cara do personagem sempre igual. Troque a descricao por qualquer conceito
+# original que voce quiser (evite copiar um personagem/pessoa real existente).
+character:
+  name: "Seu Waldemar"
+  description: >
+    3D cartoon character, a cheerful middle-aged Brazilian man with a thick
+    grey mustache, straw hat, colorful open shirt, holding a churrasco fork,
+    big expressive eyes, exaggerated proportions, Pixar-like render style,
+    plain neutral warm-colored background, front-facing portrait
+  seed: 424242
+
+niche: "esquetes de humor curtas sobre o dia a dia de um brasileiro caseiro, tom de piada/causo de churrasco"
 
 video:
   width: 1080
   height: 1920
   fps: 30
-  scenes: 5          # numero de cenas (imagem + narracao) por video
+  zoom_effect: true     # leve zoom (Ken Burns) na imagem do personagem, ao inves de imagem parada
+
+captions:
+  words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
 
 tiktok:
   enabled: true
@@ -18,11 +34,11 @@ tiktok:
 youtube:
   enabled: true
   privacy_status: "public"    # public | unlisted | private
-  category_id: "27"           # 27 = Education. Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
+  category_id: "23"           # 23 = Comedy. Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
   made_for_kids: false
 
 hashtags_extra:
-  - "#curiosidades"
-  - "#vocesabia"
-  - "#fatos"
-  - "#aprenderetiktok"
+  - "#humor"
+  - "#causo"
+  - "#churrasco"
+  - "#comediabr"
