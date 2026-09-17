@@ -7,7 +7,7 @@ import os
 
 import yaml
 
-from src import character, github_secrets, script_gen, tiktok_api, tts, video, youtube_api
+from src import character, github_secrets, script_gen, sfx, tiktok_api, tts, video, youtube_api
 
 OUTPUT_DIR = "output"
 
@@ -40,14 +40,18 @@ def main() -> None:
         script["narration"], cfg["tts_voice"], os.path.join(run_dir, "narration.mp3"),
     )
 
-    print("[3/4] Montando o video final (personagem + zoom + legendas)")
+    print("[3/4] Montando o video final (personagem + zoom + legendas + risada)")
     video_path = os.path.join(run_dir, "final.mp4")
+    sfx_cfg = cfg.get("sfx", {})
+    laugh_path = sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None
     video.build_video(
         character_image_path, audio_path, word_timings,
         width, height, cfg["video"]["fps"], video_path,
         words_per_chunk=cfg.get("captions", {}).get("words_per_chunk", 3),
         zoom_effect=cfg["video"].get("zoom_effect", True),
         tmp_dir=os.path.join(run_dir, "_captions"),
+        laugh_path=laugh_path,
+        laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
     )
 
     hashtags = " ".join(script.get("hashtags", []) + cfg.get("hashtags_extra", []))

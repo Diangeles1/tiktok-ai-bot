@@ -1,7 +1,7 @@
 # Configuracao do conteudo gerado diariamente.
 
 language: "pt-BR"
-tts_voice: "pt-BR-AntonioNeural"   # rode `edge-tts --list-voices` para ver outras opcoes pt-BR
+tts_voice: "en-US-BrianMultilingualNeural"   # voz multilingue mais natural que as pt-BR puras (rode `edge-tts --list-voices` para ver outras opcoes)
 
 # Personagem original fixo do canal. A imagem e gerada UMA vez
 # (python -m src.generate_character) e reaproveitada em todo video, pra manter
@@ -26,6 +26,10 @@ video:
 
 captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
+
+sfx:
+  laugh_enabled: true   # adiciona uma risada de grupo (assets/laughs/*.mp3, escolhida aleatoriamente) no final do video
+  laugh_gap_seconds: 0.4   # pausa entre o fim da narracao e o inicio da risada
 
 tiktok:
   enabled: true

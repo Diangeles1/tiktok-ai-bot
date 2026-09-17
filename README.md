@@ -190,6 +190,10 @@ O cron ja esta configurado para rodar todo dia as 10h (horario de Brasilia).
 - `src/script_gen.py`: ajuste o prompt do roteiro (tom, formato, idioma).
 - `captions.words_per_chunk` e `video.zoom_effect` controlam o estilo da
   legenda animada e do efeito de zoom.
+- `sfx.laugh_enabled` liga/desliga uma risada de grupo (escolhida
+  aleatoriamente entre os arquivos em `assets/laughs/`, licenca livre do
+  Mixkit) adicionada apos o fim da narracao; `sfx.laugh_gap_seconds` ajusta a
+  pausa antes dela. Adicione seus proprios mp3 em `assets/laughs/` pra variar.
 - Depois que o app for auditado pela TikTok, mude `tiktok.privacy_level` em
   `config.yaml` para `PUBLIC_TO_EVERYONE`.
 
