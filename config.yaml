@@ -11,7 +11,15 @@ video:
   fps: 30
   scenes: 5          # numero de cenas (imagem + narracao) por video
 
-privacy_level: "SELF_ONLY"  # apps nao auditados so podem postar como SELF_ONLY (rascunho privado)
+tiktok:
+  enabled: true
+  privacy_level: "SELF_ONLY"  # apps nao auditados so podem postar como SELF_ONLY (rascunho privado)
+
+youtube:
+  enabled: true
+  privacy_status: "public"    # public | unlisted | private
+  category_id: "27"           # 27 = Education. Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
+  made_for_kids: false
 
 hashtags_extra:
   - "#curiosidades"
