@@ -5,7 +5,10 @@
 content_mode: "cenas"
 
 language: "pt-BR"
-tts_voice: "en-US-BrianMultilingualNeural"   # voz multilingue mais natural que as pt-BR puras (rode `edge-tts --list-voices` para ver outras opcoes)
+# Voz nativa pt-BR: para narracao biblica o sotaque nativo importa mais que a
+# naturalidade bruta das vozes multilingues, que puxam sotaque americano.
+# Rode `edge-tts --list-voices` para ver as outras opcoes.
+tts_voice: "pt-BR-AntonioNeural"
 
 # Personagem original fixo do canal. A imagem e gerada UMA vez
 # (python -m src.generate_character) e reaproveitada em todo video, pra manter
@@ -21,17 +24,18 @@ character:
   seed: 424242
 
 niche: >
-  historias curtas de reviravolta do dia a dia brasileiro, narradas em primeira
-  pessoa, com gancho na primeira frase e uma virada no final que faca a pessoa
-  querer o proximo capitulo
+  historias da Biblia recontadas como narrativa, em linguagem simples e
+  respeitosa, com tensao crescente e uma virada que ensina algo no final
 
 # Usado apenas no content_mode "cenas".
 scenes:
   # Sufixo de estilo colado em toda imagem de cena. E o que faz as cenas
   # parecerem do mesmo video em vez de uma colagem de imagens soltas.
   style: >
-    cinematic still, warm golden hour light, shallow depth of field, soft film
-    grain, muted earthy color grade, vertical composition, no text, no logos
+    cinematic biblical epic still, ancient middle eastern setting, dramatic
+    golden light and long shadows, dust in the air, painterly oil painting
+    texture, muted earthy ochre and deep blue palette, reverent mood,
+    vertical composition, no text, no logos
   seed: 1234          # base do seed (cada cena usa seed + indice); remova para variar sempre
   gap_seconds: 0.25   # respiro entre a fala de uma cena e a da proxima
 
@@ -46,6 +50,57 @@ script:
   model: "openai/gpt-oss-120b"   # modelo da Groq usado para escrever o roteiro
   min_narration_words: 170       # abaixo disso o roteiro e gerado de novo (video precisa passar de 1 min)
   max_narration_words: 220
+
+  # Regras extras coladas no prompt do roteiro. Aqui ficam as travas que este
+  # nicho exige e que nao valeriam para outro tipo de canal.
+  extra_rules: >
+    - Reconte a historia com AS SUAS PROPRIAS PALAVRAS. Nunca cite versiculo
+      literal de traducao moderna da Biblia (NVI, NAA, NTLH e afins sao
+      protegidas por direito autoral, e copia tambem derruba a originalidade
+      exigida pelos programas de monetizacao).
+    - Seja fiel ao que a passagem conta. Nao invente acontecimento nem doutrina.
+    - Tom respeitoso e acolhedor. Nunca ataque, compare ou diminua outra religiao,
+      denominacao ou crenca.
+    - Nas descricoes visuais, prefira ambiente, objeto, paisagem, maos, luz e
+      silhueta a distancia. Evite rosto em close de figura sagrada: o gerador de
+      imagens erra rosto com frequencia e o resultado fica irreverente.
+
+  # Um tema por dia, girando pela lista pelo dia do ano. Sem isso o modelo
+  # repetiria sempre as mesmas historias famosas; assim a lista inteira roda
+  # antes de qualquer repeticao, e sem precisar guardar estado entre execucoes.
+  topics:
+    - "Jose vendido pelos irmaos e sua ascensao no Egito"
+    - "Davi enfrentando Golias com uma funda"
+    - "Daniel na cova dos leoes"
+    - "Jonas engolido pelo grande peixe"
+    - "Noe construindo a arca diante do deboche de todos"
+    - "Moises e a travessia do Mar Vermelho"
+    - "Moises e a sarca que ardia sem se consumir"
+    - "Sansao perdendo e reencontrando sua forca"
+    - "Rute escolhendo ficar com Noemi"
+    - "Ester arriscando a vida diante do rei"
+    - "Elias desafiando os profetas de Baal no Carmelo"
+    - "As muralhas de Jerico caindo apos sete voltas"
+    - "Abraao subindo o monte com Isaque"
+    - "Jaco lutando a noite inteira com o anjo"
+    - "A torre de Babel e a confusao das linguas"
+    - "Gideao vencendo com apenas trezentos homens"
+    - "Salomao julgando a disputa entre duas maes"
+    - "Naama curado depois de sete banhos no Jordao"
+    - "Os tres jovens na fornalha ardente"
+    - "Jo perdendo tudo e permanecendo firme"
+    - "O bom samaritano parando na estrada"
+    - "O filho prodigo voltando para casa"
+    - "O pastor que deixa noventa e nove para buscar uma ovelha"
+    - "Lazaro chamado de volta do tumulo"
+    - "A multiplicacao dos paes e dos peixes"
+    - "Pedro negando tres vezes e sendo restaurado"
+    - "Paulo cego no caminho de Damasco"
+    - "Paulo e Silas cantando na prisao"
+    - "A mulher que tocou a barra do manto na multidao"
+    - "Zaqueu subindo na arvore para ver de longe"
+    - "A tempestade acalmada no meio do mar"
+    - "A viuva que deu as duas ultimas moedas"
 
 captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
@@ -64,11 +119,11 @@ tiktok:
 youtube:
   enabled: true
   privacy_status: "public"    # public | unlisted | private
-  category_id: "23"           # 23 = Comedy. Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
+  category_id: "22"           # 22 = People & Blogs (nao existe categoria de religiao). Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
   made_for_kids: false
 
 hashtags_extra:
-  - "#humor"
-  - "#causo"
-  - "#churrasco"
-  - "#comediabr"
+  - "#fe"
+  - "#biblia"
+  - "#historiasbiblicas"
+  - "#reflexao"

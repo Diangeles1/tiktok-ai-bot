@@ -12,34 +12,35 @@ with open("config.yaml", "r", encoding="utf-8") as f:
 
 FAKE_SCENES = [
     {
-        "narration": "Eu trabalhei doze anos na mesma padaria da esquina, "
-                     "e achava que ia me aposentar ali atras do balcao.",
-        "visual": "empty neighborhood bakery at dawn, bread on wooden shelves, "
-                  "warm light through a dusty window",
+        "narration": "Um homem passou anos construindo um barco gigante "
+                     "em terra seca, longe de qualquer rio ou mar.",
+        "visual": "enormous unfinished wooden ship on dry cracked ground, "
+                  "scaffolding of rough timber, harsh midday sun, dust in the air",
     },
     {
-        "narration": "Numa terca-feira comum, o dono chegou mais cedo, "
-                     "sentou na mesa do fundo e me chamou pelo nome completo.",
-        "visual": "older man sitting alone at a small cafe table in the back of a "
-                  "bakery, serious expression, morning shadows",
+        "narration": "A vizinhanca inteira ria. Alguns paravam o trabalho "
+                     "so pra assistir e fazer piada do velho e da sua loucura.",
+        "visual": "silhouettes of villagers gathered at a distance under an "
+                  "ancient stone archway, looking toward the horizon, long shadows",
     },
     {
-        "narration": "Eu jurei que era demissao. Comecei a pensar em como contar "
-                     "em casa, e nem escutei a primeira frase que ele falou.",
-        "visual": "close up of worn hands holding a folded paper apron, "
-                  "out of focus kitchen in the background",
+        "narration": "Ele nao discutia. Continuava cortando madeira, "
+                     "medindo, vedando cada fresta, dia depois de dia.",
+        "visual": "section of a large wooden hull under construction, thick planks "
+                  "sealed with dark pitch, wooden mallet and bucket of tar on the "
+                  "ground, medium shot, no people",
     },
     {
-        "narration": "Ele repetiu com calma: nao vou te demitir, eu vou vender a "
-                     "padaria, e queria que voce fosse o primeiro a saber.",
-        "visual": "handwritten for sale sign taped inside a bakery glass door, "
-                  "quiet empty street outside",
+        "narration": "Entao o ceu mudou de cor. O primeiro pingo caiu "
+                     "e ninguem mais achou graca nenhuma.",
+        "visual": "heavy dark storm clouds rolling over a desert valley, first "
+                  "rain streaks catching the last light, dramatic sky",
     },
     {
-        "narration": "Dois anos depois, o nome na fachada e o meu. "
-                     "As vezes a pior terca-feira da sua vida esta te promovendo.",
-        "visual": "new bakery storefront sign at golden hour, fresh paint, "
-                  "warm inviting light spilling onto the sidewalk",
+        "narration": "As vezes obedecer parece loucura enquanto o ceu esta limpo. "
+                     "A chuva so mostra quem estava certo depois.",
+        "visual": "single shaft of golden light breaking through dark clouds over "
+                  "calm water, distant ark silhouette, reverent atmosphere",
     },
 ]
 

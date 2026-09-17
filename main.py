@@ -24,13 +24,16 @@ def load_config() -> dict:
 
 def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple[dict, list[dict]]:
     script_cfg = cfg.get("script", {})
-    print(f"[1/4] Gerando roteiro em cenas (tema: {cfg['niche'][:50]}...)")
+    seed_topic = script_gen.topic_of_the_day(script_cfg.get("topics", []))
+    print(f"[1/4] Gerando roteiro em cenas (tema do dia: {seed_topic or 'livre'})")
     script = script_gen.generate_scene_script(
         niche=cfg["niche"],
         language=cfg["language"],
+        seed_topic=seed_topic,
         model=script_cfg.get("model", script_gen.MODEL),
         min_words=script_cfg.get("min_narration_words", script_gen.MIN_NARRATION_WORDS),
         max_words=script_cfg.get("max_narration_words", 220),
+        extra_rules=script_cfg.get("extra_rules"),
     )
     scenes = script["scenes"]
     print(f"  Tema de hoje: {script['topic']} "
