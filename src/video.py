@@ -1,53 +1,134 @@
-"""Montagem do video final: imagem fixa do personagem (com leve zoom/Ken Burns)
-+ narracao + legendas animadas palavra por palavra, via MoviePy/ffmpeg."""
+"""Montagem do video final: sequencia de cenas (imagem + narracao) com leve
+zoom, legendas animadas palavra por palavra, risada e musica de fundo.
+
+Um video de personagem fixo e so o caso de uma unica cena que dura a narracao
+inteira, entao os dois formatos usam este mesmo caminho."""
 import os
 
-from moviepy.editor import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ImageClip
+import numpy as np
+from moviepy.audio.fx.all import audio_fadeout, audio_loop
+from moviepy.editor import (AudioFileClip, CompositeAudioClip, CompositeVideoClip,
+                             ImageClip, VideoClip)
+from PIL import Image
 
 from src.captions import build_chunks, render_caption_png
 
 
-def _ken_burns(clip, duration: float, zoom_end: float = 1.12):
-    return clip.resize(lambda t: 1 + (zoom_end - 1) * (t / duration))
+def _ease(progress: float) -> float:
+    """Smoothstep: acelera e desacelera nas pontas. Movimento linear entrega que
+    e interpolacao de software; com easing parece movimento de camera."""
+    return progress * progress * (3 - 2 * progress)
 
 
-def build_video(character_image_path: str, audio_path: str, word_timings: list[dict],
-                 width: int, height: int, fps: int, out_path: str,
+# Movimentos de camera alternados por cena, para o video nao ficar repetitivo:
+# (zoom inicial, zoom final, pan inicial, pan final), pan em fracao do excedente
+# da imagem (0 = borda esquerda/topo, 0.5 = centro, 1 = borda direita/base).
+CAMERA_MOVES = [
+    (1.04, 1.16, (0.35, 0.50), (0.65, 0.50)),
+    (1.16, 1.04, (0.65, 0.50), (0.35, 0.50)),
+    (1.04, 1.16, (0.50, 0.62), (0.50, 0.38)),
+    (1.16, 1.04, (0.50, 0.38), (0.50, 0.62)),
+]
+
+
+def _camera_move(image_path: str, duration: float, width: int, height: int, move: tuple):
+    """Ken Burns com easing: zoom e pan simultaneos sobre a imagem parada.
+
+    Cada quadro e um recorte da imagem original redimensionado direto para o
+    tamanho do video. Ampliar a imagem e reposicionar com offset seria o caminho
+    obvio, mas ai qualquer erro de arredondamento no offset expoe faixa preta na
+    beirada; recortando, o quadro sai sempre exato."""
+    zoom_from, zoom_to, pan_from, pan_to = move
+    source = Image.open(image_path).convert("RGB")
+    src_w, src_h = source.size
+
+    # maior janela com o aspecto do video que cabe na imagem, no zoom 1
+    full_w = min(src_w, src_h * width / height)
+    full_h = full_w * height / width
+
+    def make_frame(t):
+        progress = _ease(min(1.0, t / duration))
+        zoom = zoom_from + (zoom_to - zoom_from) * progress
+        win_w, win_h = full_w / zoom, full_h / zoom
+        fx = pan_from[0] + (pan_to[0] - pan_from[0]) * progress
+        fy = pan_from[1] + (pan_to[1] - pan_from[1]) * progress
+        left = (src_w - win_w) * fx
+        top = (src_h - win_h) * fy
+        frame = source.resize((width, height), Image.BICUBIC,
+                               box=(left, top, left + win_w, top + win_h))
+        return np.asarray(frame)
+
+    return VideoClip(make_frame, duration=duration)
+
+
+def _build_audio(scenes: list[dict], narration_end: float, total: float,
+                  laugh_path: str | None, laugh_gap: float,
+                  music_path: str | None, music_volume: float) -> tuple:
+    tracks = [AudioFileClip(s["audio"]).set_start(s["start"]) for s in scenes]
+
+    if laugh_path:
+        tracks.append(AudioFileClip(laugh_path).set_start(narration_end + laugh_gap))
+
+    if music_path:
+        music = AudioFileClip(music_path).volumex(music_volume)
+        music = audio_loop(music, duration=total)
+        tracks.append(audio_fadeout(music, min(2.0, total / 4)))
+
+    return CompositeAudioClip(tracks), tracks
+
+
+def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path: str,
                  words_per_chunk: int = 3, zoom_effect: bool = True,
                  tmp_dir: str = "output/_captions",
                  laugh_path: str | None = None, laugh_gap: float = 0.4,
-                 caption_bottom_margin: int = 420) -> str:
-    narration_clip = AudioFileClip(audio_path)
-    narration_duration = narration_clip.duration
-
+                 caption_bottom_margin: int = 420,
+                 music_path: str | None = None, music_volume: float = 0.10,
+                 crossfade: float = 0.6) -> str:
+    """Cada cena precisa de "image", "audio", "start", "duration" e "timings"
+    (tempos absolutos), como monta src.scenes."""
+    narration_end = scenes[-1]["start"] + scenes[-1]["duration"]
+    total = narration_end
     if laugh_path:
-        laugh_clip = AudioFileClip(laugh_path).set_start(narration_duration + laugh_gap)
-        audio_clip = CompositeAudioClip([narration_clip, laugh_clip])
-        duration = narration_duration + laugh_gap + laugh_clip.duration
-    else:
-        audio_clip = narration_clip
-        duration = narration_duration
+        with AudioFileClip(laugh_path) as laugh:
+            total = narration_end + laugh_gap + laugh.duration
 
-    bg = ImageClip(character_image_path).resize(height=height).set_duration(duration)
-    if zoom_effect:
-        bg = _ken_burns(bg, duration)
-    bg = bg.set_position("center")
+    scene_clips = []
+    for i, scene in enumerate(scenes):
+        is_last = i == len(scenes) - 1
+        # a imagem passa do fim da propria cena para a proxima ter algo por baixo
+        # durante o crossfade; a ultima estica ate o fim para a risada nao cair
+        # sobre tela preta
+        visual_duration = (total - scene["start"]) if is_last else (scene["duration"] + crossfade)
+
+        if zoom_effect:
+            clip = _camera_move(scene["image"], visual_duration, width, height,
+                                 CAMERA_MOVES[i % len(CAMERA_MOVES)])
+        else:
+            clip = (ImageClip(scene["image"]).set_duration(visual_duration)
+                    .resize(height=height).set_position("center"))
+
+        clip = clip.set_start(scene["start"])
+        if i > 0:
+            clip = clip.crossfadein(crossfade)
+        scene_clips.append(clip)
 
     caption_clips = []
     os.makedirs(tmp_dir, exist_ok=True)
-    for i, chunk in enumerate(build_chunks(word_timings, words_per_chunk)):
+    timings = [t for scene in scenes for t in scene["timings"]]
+    for i, chunk in enumerate(build_chunks(timings, words_per_chunk)):
         png_path, png_height = render_caption_png(chunk["text"], width, f"{tmp_dir}/cap_{i}.png")
-        clip_duration = max(0.05, chunk["end"] - chunk["start"])
-        caption_clip = (
+        caption_clips.append(
             ImageClip(png_path)
             .set_start(chunk["start"])
-            .set_duration(clip_duration)
+            .set_duration(max(0.05, chunk["end"] - chunk["start"]))
             .set_position(("center", height - png_height - caption_bottom_margin))
         )
-        caption_clips.append(caption_clip)
 
-    final = CompositeVideoClip([bg] + caption_clips, size=(width, height)).set_audio(audio_clip)
-    final = final.set_duration(duration)
+    audio, audio_tracks = _build_audio(scenes, narration_end, total,
+                                        laugh_path, laugh_gap, music_path, music_volume)
+
+    final = CompositeVideoClip(scene_clips + caption_clips, size=(width, height))
+    final = final.set_audio(audio).set_duration(total)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     final.write_videofile(
@@ -61,9 +142,7 @@ def build_video(character_image_path: str, audio_path: str, word_timings: list[d
     )
 
     final.close()
-    bg.close()
-    narration_clip.close()
-    for c in caption_clips:
-        c.close()
+    for clip in scene_clips + caption_clips + audio_tracks:
+        clip.close()
 
     return out_path
