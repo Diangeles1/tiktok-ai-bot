@@ -1,25 +1,52 @@
 # tiktok-ai-bot
 
-Bot que gera um video curto por dia (roteiro + narracao + imagens, tudo por IA)
-e publica no **TikTok** e no **YouTube Shorts** usando as **APIs oficiais**
-de cada plataforma, via GitHub Actions (cron diario). Nao usa scraping nem
-automacao de navegador — isso viola os Termos de Servico das plataformas e
-arrisca banir a conta.
+Bot que gera uma esquete de humor por dia — estrelada por um personagem 3D
+fixo e original — e publica no **TikTok** e no **YouTube Shorts** usando as
+**APIs oficiais** de cada plataforma, via GitHub Actions (cron diario). Nao
+usa scraping nem automacao de navegador — isso viola os Termos de Servico das
+plataformas e arrisca banir a conta.
 
 ## Como funciona
 
 ```
-Groq (LLM gratuito)  -> roteiro (cenas + legenda + hashtags)
-edge-tts (gratuito)  -> narracao em audio de cada cena
-Pollinations.ai (gratuito) -> imagem de cada cena + legenda "queimada" na imagem
-MoviePy/ffmpeg       -> monta o video vertical final (1080x1920)
+Pollinations.ai (gratuito, 1x so) -> gera e cacheia a imagem do personagem fixo
+Groq (LLM gratuito)   -> roteiro (monologo do personagem + legenda + hashtags)
+edge-tts (gratuito)   -> narracao + timing de cada palavra
+MoviePy/ffmpeg        -> personagem com zoom leve + legendas animadas palavra-a-palavra
 TikTok Content Posting API   -> publica no TikTok
 YouTube Data API v3          -> publica no YouTube Shorts
 ```
 
-O mesmo video gerado e enviado para as duas plataformas. Cada uma e
+A MESMA imagem do personagem (gerada uma unica vez e commitada em
+`assets/character.png`) e reaproveitada em todo video, pra ele ficar sempre
+com a mesma cara. O video final e enviado para as duas plataformas de forma
 independente (`tiktok.enabled` / `youtube.enabled` em `config.yaml`) — se uma
 falhar ou nao estiver configurada, a outra continua normalmente.
+
+### Por que sem lip-sync (boca sincronizada)?
+
+Deu pra fazer 100% gratuito assim. Um avatar com a boca se mexendo sincronizada
+com a voz exige servicos pagos (HeyGen, D-ID, Synthesia). E hoje ha um motivo
+a mais pra nao usar: a politica do **TikTok Creator Rewards Program** exclui
+explicitamente "conteudo que contenha sincronizacao labial" da definicao de
+conteudo original elegivel para monetizacao — entao o formato atual (narracao
++ legenda, sem lip-sync) e o que melhor se encaixa nas regras de hoje.
+
+## Sobre monetizacao (TikTok Creator Rewards Program)
+
+Vale saber antes de esperar renda do bot:
+
+- Precisa de conta pessoal, 18+, **10.000 seguidores** e **100.000
+  visualizacoes nos ultimos 30 dias** pra sequer se inscrever no programa.
+- Video precisa ter **pelo menos 1 minuto** — por isso o roteiro foi ajustado
+  para narracoes de ~170-220 palavras.
+- Conteudo de IA nao e proibido, mas precisa contar como "original": nada de
+  copiar conteudo de terceiros, watermark de outro app, ou so overlay de texto
+  em foto/video alheio. TikTok tambem pede pra rotular conteudo gerado por IA
+  (Configuracoes do video > "Rotular como IA" no app, manualmente por enquanto
+  — a Content Posting API nao expõe esse campo ainda).
+- YouTube tem programa equivalente (YouTube Partner Program), com seus proprios
+  requisitos de inscritos/horas assistidas — nao coberto em detalhe aqui.
 
 ## Limitacao importante do TikTok
 
@@ -57,17 +84,30 @@ inclui `docs/oauth-callback.html` pronto para isso.
 - https://console.groq.com/keys > Create API Key
 - Guarde como `GROQ_API_KEY`
 
-### 4. Crie o app no TikTok for Developers
+### 4. Gere a imagem do personagem (uma vez, e commite no repo)
+
+```bash
+pip install -r requirements.txt
+python -m src.generate_character
+git add assets/character.png
+git commit -m "Gera personagem do canal"
+git push
+```
+
+Isso fixa a aparencia do personagem pra sempre (o gerador de imagens gratuito
+nao repete o mesmo rosto sozinho a cada chamada). Quer trocar o visual? Edite
+`character.description` em `config.yaml` e rode com `--force`.
+
+### 5. Crie o app no TikTok for Developers
 
 - https://developers.tiktok.com/apps > Create app
 - Adicione o produto **Content Posting API** (e **Login Kit**)
 - Em Login Kit > Redirect URI, cadastre a URL do passo 2
 - Anote `Client key` e `Client secret`
 
-### 5. Gere o primeiro refresh token (roda so uma vez, na sua maquina)
+### 6. Gere o primeiro refresh token (roda so uma vez, na sua maquina)
 
 ```bash
-pip install -r requirements.txt
 python -m src.oauth_setup
 ```
 
@@ -76,7 +116,7 @@ O script vai pedir `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` e o
 do TikTok que vai postar), e pedir que voce cole o `code` que aparece na
 pagina de callback. No final ele imprime o `TIKTOK_REFRESH_TOKEN`.
 
-### 6. Crie um GitHub Personal Access Token (para o bot atualizar o token do TikTok sozinho)
+### 7. Crie um GitHub Personal Access Token (para o bot atualizar o token do TikTok sozinho)
 
 O `refresh_token` do TikTok pode mudar a cada renovacao. Para o bot continuar
 funcionando sem voce intervir toda semana, ele atualiza o secret sozinho via
@@ -87,7 +127,7 @@ rotaciona a cada uso.)
 - Escopo: `repo`
 - Guarde como `GH_PAT`
 
-### 7. Crie o projeto no Google Cloud e o app do YouTube
+### 8. Crie o projeto no Google Cloud e o app do YouTube
 
 - https://console.cloud.google.com/ > crie um projeto novo
 - APIs e servicos > Biblioteca > ative **"YouTube Data API v3"**
@@ -104,7 +144,7 @@ rotaciona a cada uso.)
   tipo **"App para computador" (Desktop app)**
 - Anote o `Client ID` e o `Client secret`
 
-### 8. Gere o refresh token do YouTube (roda so uma vez, na sua maquina)
+### 9. Gere o refresh token do YouTube (roda so uma vez, na sua maquina)
 
 ```bash
 python -m src.youtube_oauth_setup
@@ -113,26 +153,26 @@ python -m src.youtube_oauth_setup
 O script abre o navegador para voce logar com a conta do YouTube que vai
 receber os Shorts, e no final imprime o `YOUTUBE_REFRESH_TOKEN`.
 
-### 9. Cadastre os Secrets no repositorio
+### 10. Cadastre os Secrets no repositorio
 
 Settings > Secrets and variables > Actions > New repository secret:
 
 | Nome | Valor |
 |---|---|
 | `GROQ_API_KEY` | do passo 3 |
-| `TIKTOK_CLIENT_KEY` | do passo 4 |
-| `TIKTOK_CLIENT_SECRET` | do passo 4 |
-| `TIKTOK_REFRESH_TOKEN` | do passo 5 |
-| `GH_PAT` | do passo 6 |
-| `YOUTUBE_CLIENT_ID` | do passo 7 |
-| `YOUTUBE_CLIENT_SECRET` | do passo 7 |
-| `YOUTUBE_REFRESH_TOKEN` | do passo 8 |
+| `TIKTOK_CLIENT_KEY` | do passo 5 |
+| `TIKTOK_CLIENT_SECRET` | do passo 5 |
+| `TIKTOK_REFRESH_TOKEN` | do passo 6 |
+| `GH_PAT` | do passo 7 |
+| `YOUTUBE_CLIENT_ID` | do passo 8 |
+| `YOUTUBE_CLIENT_SECRET` | do passo 8 |
+| `YOUTUBE_REFRESH_TOKEN` | do passo 9 |
 
 Se voce quiser usar so uma das duas plataformas, deixe os secrets da outra
 vazios e desative-a em `config.yaml` (`tiktok.enabled: false` ou
 `youtube.enabled: false`).
 
-### 10. Teste manualmente antes de deixar no automatico
+### 11. Teste manualmente antes de deixar no automatico
 
 Actions > Daily AI video post > Run workflow > `dry_run: true` primeiro
 (gera o video mas nao publica em nenhuma plataforma), confira o artifact
@@ -143,9 +183,13 @@ O cron ja esta configurado para rodar todo dia as 10h (horario de Brasilia).
 
 ## Customizacao
 
-- `config.yaml`: mude `niche` para o tema do canal, quantidade de cenas,
-  vozes do TTS, hashtags fixas, e ligue/desligue cada plataforma.
+- `config.yaml`: `character.name`/`character.description` definem o
+  personagem (rode `python -m src.generate_character --force` depois de
+  mudar a descricao), `niche` o tipo de causo/piada, alem de vozes do TTS,
+  hashtags fixas e liga/desliga de cada plataforma.
 - `src/script_gen.py`: ajuste o prompt do roteiro (tom, formato, idioma).
+- `captions.words_per_chunk` e `video.zoom_effect` controlam o estilo da
+  legenda animada e do efeito de zoom.
 - Depois que o app for auditado pela TikTok, mude `tiktok.privacy_level` em
   `config.yaml` para `PUBLIC_TO_EVERYONE`.
 
