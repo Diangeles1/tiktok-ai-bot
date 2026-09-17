@@ -1,13 +1,18 @@
-"""Orquestrador: gera o roteiro da esquete, a narracao com timing de palavras,
-monta o video (personagem fixo + zoom + legendas animadas) e publica no
-TikTok e no YouTube Shorts. Pensado para rodar 1x/dia via GitHub Actions.
-Cada plataforma e independente: se uma falhar, a outra ainda e tentada."""
+"""Orquestrador: gera o roteiro, a narracao com timing de palavras, monta o
+video e publica no TikTok e no YouTube Shorts. Pensado para rodar 1x/dia via
+GitHub Actions. Cada plataforma e independente: se uma falhar, a outra ainda e
+tentada.
+
+Dois formatos, escolhidos em content_mode no config.yaml:
+ - "cenas": narracao por cima de imagens que mudam (canal dark)
+ - "personagem": monologo do personagem fixo, uma imagem so"""
 import datetime
 import os
 
 import yaml
 
-from src import character, github_secrets, script_gen, sfx, tiktok_api, tts, video, youtube_api
+from src import (character, github_secrets, scenes as scenes_mod, script_gen, sfx,
+                 tiktok_api, video, youtube_api)
 
 OUTPUT_DIR = "output"
 
@@ -17,16 +22,35 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def main() -> None:
-    cfg = load_config()
-    today = datetime.date.today().isoformat()
-    run_dir = os.path.join(OUTPUT_DIR, today)
-    os.makedirs(run_dir, exist_ok=True)
-
-    width, height = cfg["video"]["width"], cfg["video"]["height"]
-    character_image_path = character.ensure_character_image(cfg["character"], width, height)
-
+def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple[dict, list[dict]]:
     script_cfg = cfg.get("script", {})
+    print(f"[1/4] Gerando roteiro em cenas (tema: {cfg['niche'][:50]}...)")
+    script = script_gen.generate_scene_script(
+        niche=cfg["niche"],
+        language=cfg["language"],
+        model=script_cfg.get("model", script_gen.MODEL),
+        min_words=script_cfg.get("min_narration_words", script_gen.MIN_NARRATION_WORDS),
+        max_words=script_cfg.get("max_narration_words", 220),
+    )
+    scenes = script["scenes"]
+    print(f"  Tema de hoje: {script['topic']} "
+          f"({script_gen.scene_word_count(script)} palavras em {len(scenes)} cenas)")
+
+    print(f"[2/4] Gerando as {len(scenes)} imagens das cenas")
+    scenes_mod.render_images(
+        scenes,
+        style=cfg["scenes"]["style"],
+        width=width, height=height,
+        out_dir=os.path.join(run_dir, "scenes"),
+        seed=cfg["scenes"].get("seed"),
+    )
+    return script, scenes
+
+
+def _build_character_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple[dict, list[dict]]:
+    script_cfg = cfg.get("script", {})
+    image = character.ensure_character_image(cfg["character"], width, height)
+
     print(f"[1/4] Gerando roteiro da esquete de: {cfg['character']['name']}")
     script = script_gen.generate_script(
         character_name=cfg["character"]["name"],
@@ -38,25 +62,49 @@ def main() -> None:
     )
     print(f"  Tema de hoje: {script['topic']} ({len(script['narration'].split())} palavras)")
 
-    print("[2/4] Gerando narracao (com timing de cada palavra)")
-    audio_path, word_timings = tts.synthesize_with_timings(
-        script["narration"], cfg["tts_voice"], os.path.join(run_dir, "narration.mp3"),
-    )
+    print("[2/4] Personagem fixo, nenhuma imagem nova a gerar")
+    return script, [{"narration": script["narration"], "image": image}]
 
-    print("[3/4] Montando o video final (personagem + zoom + legendas + risada)")
+
+def main() -> None:
+    cfg = load_config()
+    today = datetime.date.today().isoformat()
+    run_dir = os.path.join(OUTPUT_DIR, today)
+    os.makedirs(run_dir, exist_ok=True)
+
+    width, height = cfg["video"]["width"], cfg["video"]["height"]
+    mode = cfg.get("content_mode", "cenas")
+
+    if mode == "cenas":
+        script, scenes = _build_scene_mode(cfg, run_dir, width, height)
+        scene_gap = cfg["scenes"].get("gap_seconds", 0.25)
+    elif mode == "personagem":
+        script, scenes = _build_character_mode(cfg, run_dir, width, height)
+        scene_gap = 0.0
+    else:
+        raise ValueError(f"content_mode desconhecido: {mode!r} (use 'cenas' ou 'personagem')")
+
+    print("[3/4] Gerando a narracao (com timing de cada palavra)")
+    total = scenes_mod.render_narration(
+        scenes, cfg["tts_voice"], os.path.join(run_dir, "narration"), gap=scene_gap,
+    )
+    print(f"  Narracao de {total:.1f}s")
+
+    print("[4/4] Montando o video final")
     video_path = os.path.join(run_dir, "final.mp4")
     sfx_cfg = cfg.get("sfx", {})
     captions_cfg = cfg.get("captions", {})
-    laugh_path = sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None
     video.build_video(
-        character_image_path, audio_path, word_timings,
-        width, height, cfg["video"]["fps"], video_path,
+        scenes, width, height, cfg["video"]["fps"], video_path,
         words_per_chunk=captions_cfg.get("words_per_chunk", 3),
         zoom_effect=cfg["video"].get("zoom_effect", True),
         tmp_dir=os.path.join(run_dir, "_captions"),
-        laugh_path=laugh_path,
+        laugh_path=sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None,
         laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
         caption_bottom_margin=captions_cfg.get("bottom_margin", 420),
+        music_path=sfx.pick_random_music() if sfx_cfg.get("music_enabled", True) else None,
+        music_volume=sfx_cfg.get("music_volume", 0.10),
+        crossfade=cfg["video"].get("crossfade_seconds", 0.4),
     )
 
     hashtags = " ".join(script.get("hashtags", []) + cfg.get("hashtags_extra", []))
