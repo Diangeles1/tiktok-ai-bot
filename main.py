@@ -24,8 +24,13 @@ def load_config() -> dict:
 
 def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple[dict, list[dict]]:
     script_cfg = cfg.get("script", {})
-    seed_topic = script_gen.topic_of_the_day(script_cfg.get("topics", []))
-    print(f"[1/4] Gerando roteiro em cenas (tema do dia: {seed_topic or 'livre'})")
+    hours = cfg.get("posting_hours_utc", [])
+    slot = script_gen.current_slot(hours)
+    seed_topic = script_gen.topic_of_the_day(
+        script_cfg.get("topics", []), slot_index=slot, slot_count=max(1, len(hours)),
+    )
+    print(f"[1/4] Gerando roteiro em cenas "
+          f"(publicacao {slot + 1} de {max(1, len(hours))}, tema: {seed_topic or 'livre'})")
     script = script_gen.generate_scene_script(
         niche=cfg["niche"],
         language=cfg["language"],
@@ -72,7 +77,10 @@ def _build_character_mode(cfg: dict, run_dir: str, width: int, height: int) -> t
 def main() -> None:
     cfg = load_config()
     today = datetime.date.today().isoformat()
-    run_dir = os.path.join(OUTPUT_DIR, today)
+    # o slot entra no nome da pasta porque com mais de uma publicacao por dia as
+    # execucoes gravariam uma sobre a outra
+    slot_suffix = script_gen.current_slot(cfg.get("posting_hours_utc", [])) + 1
+    run_dir = os.path.join(OUTPUT_DIR, f"{today}_{slot_suffix}")
     os.makedirs(run_dir, exist_ok=True)
 
     width, height = cfg["video"]["width"], cfg["video"]["height"]

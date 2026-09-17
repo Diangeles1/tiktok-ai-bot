@@ -2,8 +2,13 @@ name: Daily AI video post (TikTok + YouTube Shorts)
 
 on:
   schedule:
-    # 13:00 UTC = 10:00 America/Sao_Paulo (UTC-3, sem horario de verao)
-    - cron: "0 13 * * *"
+    # O Brasil e UTC-3 (sem horario de verao). Tres publicacoes por dia, nos
+    # horarios em que o publico costuma estar ativo. Precisa casar com
+    # posting_hours_utc no config.yaml: e de la que o bot deduz qual publicacao
+    # esta rodando, para cada uma pegar um tema diferente.
+    - cron: "0 9 * * *"    # 06h de Brasilia, devocional da manha
+    - cron: "0 15 * * *"   # 12h de Brasilia, horario de almoco
+    - cron: "0 23 * * *"   # 20h de Brasilia, noite
   workflow_dispatch:
     inputs:
       dry_run:

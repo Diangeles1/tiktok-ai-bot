@@ -24,8 +24,16 @@ character:
   seed: 424242
 
 niche: >
-  historias da Biblia recontadas como narrativa, em linguagem simples e
-  respeitosa, com tensao crescente e uma virada que ensina algo no final
+  historias cristas recontadas como narrativa: passagens dos evangelhos sobre
+  Jesus Cristo, historias do Antigo Testamento e vidas de santos da tradicao
+  catolica. Linguagem simples e respeitosa, com tensao crescente e uma virada
+  que ensina algo no final
+
+# Horarios de publicacao em UTC. O Brasil e UTC-3, entao 09 UTC = 06h, 15 UTC =
+# 12h e 23 UTC = 20h no horario de Brasilia: manha (devocional), almoco e noite.
+# O bot deduz do relogio qual publicacao esta rodando, para cada uma pegar um
+# tema diferente. Precisa casar com os cron em .github/workflows/daily-post.yml.
+posting_hours_utc: [9, 15, 23]
 
 # Usado apenas no content_mode "cenas".
 scenes:
@@ -62,49 +70,130 @@ script:
       literal de traducao moderna da Biblia (NVI, NAA, NTLH e afins sao
       protegidas por direito autoral, e copia tambem derruba a originalidade
       exigida pelos programas de monetizacao).
-    - Seja fiel ao que a passagem conta. Nao invente acontecimento nem doutrina.
+    - Seja fiel ao que a passagem ou a tradicao conta. Nao invente acontecimento
+      nem doutrina. Em historia de santo, fique no que a tradicao registra.
     - Tom respeitoso e acolhedor. Nunca ataque, compare ou diminua outra religiao,
       denominacao ou crenca.
     - Nas descricoes visuais, prefira ambiente, objeto, paisagem, maos, luz e
       silhueta a distancia. Evite rosto em close de figura sagrada: o gerador de
       imagens erra rosto com frequencia e o resultado fica irreverente.
 
-  # Um tema por dia, girando pela lista pelo dia do ano. Sem isso o modelo
-  # repetiria sempre as mesmas historias famosas; assim a lista inteira roda
-  # antes de qualquer repeticao, e sem precisar guardar estado entre execucoes.
+  # Um tema por publicacao, girando pela lista. Sem isso o modelo repetiria
+  # sempre as historias mais famosas, e as tres execucoes do mesmo dia sairiam
+  # iguais. Deterministico e sem estado entre execucoes.
+  # A lista precisa ser grande: com 3 videos por dia, 30 temas repetem em 10
+  # dias. Os 96 abaixo dao mais de um mes sem repetir.
   topics:
-    - "Jose vendido pelos irmaos e sua ascensao no Egito"
-    - "Davi enfrentando Golias com uma funda"
-    - "Daniel na cova dos leoes"
-    - "Jonas engolido pelo grande peixe"
-    - "Noe construindo a arca diante do deboche de todos"
-    - "Moises e a travessia do Mar Vermelho"
-    - "Moises e a sarca que ardia sem se consumir"
-    - "Sansao perdendo e reencontrando sua forca"
-    - "Rute escolhendo ficar com Noemi"
-    - "Ester arriscando a vida diante do rei"
-    - "Elias desafiando os profetas de Baal no Carmelo"
-    - "As muralhas de Jerico caindo apos sete voltas"
-    - "Abraao subindo o monte com Isaque"
-    - "Jaco lutando a noite inteira com o anjo"
-    - "A torre de Babel e a confusao das linguas"
-    - "Gideao vencendo com apenas trezentos homens"
-    - "Salomao julgando a disputa entre duas maes"
-    - "Naama curado depois de sete banhos no Jordao"
-    - "Os tres jovens na fornalha ardente"
-    - "Jo perdendo tudo e permanecendo firme"
+    # --- Jesus: infancia e inicio do ministerio ---
+    - "O nascimento em Belem, sem lugar na hospedaria"
+    - "Os pastores avisados pelos anjos no campo"
+    - "Os magos seguindo a estrela do oriente"
+    - "A fuga para o Egito no meio da noite"
+    - "Jesus perdido no templo aos doze anos"
+    - "O batismo no rio Jordao"
+    - "As quarenta noites de tentacao no deserto"
+    - "O chamado dos pescadores para deixarem as redes"
+    - "As bodas de Cana, quando a agua virou vinho"
+    - "A pesca milagrosa depois da noite inteira sem nada"
+    # --- Jesus: milagres ---
+    - "A tempestade acalmada no meio do mar"
+    - "Jesus andando sobre as aguas e Pedro afundando"
+    - "A multiplicacao dos paes e dos peixes"
+    - "O paralitico descido pelo buraco do telhado"
+    - "O cego de Jerico que nao parou de gritar"
+    - "Os dez leprosos e o unico que voltou para agradecer"
+    - "A mulher doente que tocou a barra do manto na multidao"
+    - "A filha de Jairo, quando todos ja choravam"
+    - "Lazaro chamado de volta do tumulo"
+    - "O servo do centurio curado de longe"
+    - "A sogra de Pedro curada da febre"
+    - "O homem com a mao atrofiada curado no sabado"
+    # --- Jesus: encontros ---
+    - "Zaqueu subindo na arvore para ver de longe"
+    - "A samaritana e a conversa no poco ao meio-dia"
+    - "A mulher acusada de adulterio e as pedras no chao"
+    - "Nicodemos procurando Jesus de madrugada"
+    - "Maria e Marta recebendo Jesus em Betania"
+    - "O jovem rico que nao conseguiu se desfazer do que tinha"
+    - "Mateus, o cobrador de impostos, chamado da mesa"
+    - "A viuva de Naim e o filho unico no caminho do enterro"
+    # --- Jesus: parabolas ---
     - "O bom samaritano parando na estrada"
     - "O filho prodigo voltando para casa"
     - "O pastor que deixa noventa e nove para buscar uma ovelha"
-    - "Lazaro chamado de volta do tumulo"
-    - "A multiplicacao dos paes e dos peixes"
-    - "Pedro negando tres vezes e sendo restaurado"
-    - "Paulo cego no caminho de Damasco"
-    - "Paulo e Silas cantando na prisao"
-    - "A mulher que tocou a barra do manto na multidao"
-    - "Zaqueu subindo na arvore para ver de longe"
-    - "A tempestade acalmada no meio do mar"
+    - "O semeador e os quatro tipos de terreno"
+    - "O grao de mostarda que virou arvore"
+    - "As dez virgens e as lampadas sem azeite"
+    - "Os talentos confiados aos tres servos"
     - "A viuva que deu as duas ultimas moedas"
+    - "O rico e o pobre Lazaro na porta"
+    - "O fariseu e o publicano orando no templo"
+    - "O credor que perdoou e o servo que nao perdoou"
+    - "O tesouro escondido no campo"
+    # --- Jesus: paixao e ressurreicao ---
+    - "A entrada em Jerusalem sobre um jumento"
+    - "A ultima ceia e o pao repartido"
+    - "O lava-pes que ninguem entendeu na hora"
+    - "A agonia no jardim de Getsemani"
+    - "A traicao selada com um beijo"
+    - "Pedro negando tres vezes antes do galo cantar"
+    - "Jesus calado diante de Pilatos"
+    - "Simao ajudando a carregar a cruz"
+    - "O bom ladrao ao lado na cruz"
+    - "A escuridao do meio-dia no calvario"
+    - "A pedra encontrada rolada na manha de domingo"
+    - "Maria Madalena confundindo Jesus com o jardineiro"
+    - "Os discipulos de Emaus reconhecendo no partir do pao"
+    - "Tome que precisou ver para acreditar"
+    - "O peixe assado na praia e o perdao de Pedro"
+    - "A ascensao diante dos discipulos"
+    - "Pentecostes e as linguas de fogo"
+    # --- Antigo Testamento ---
+    - "Noe construindo a arca diante do deboche de todos"
+    - "A torre de Babel e a confusao das linguas"
+    - "Abraao subindo o monte com Isaque"
+    - "Jaco lutando a noite inteira com o anjo"
+    - "Jose vendido pelos irmaos e sua ascensao no Egito"
+    - "Moises e a sarca que ardia sem se consumir"
+    - "Moises e a travessia do Mar Vermelho"
+    - "As muralhas de Jerico caindo apos sete voltas"
+    - "Gideao vencendo com apenas trezentos homens"
+    - "Sansao perdendo e reencontrando sua forca"
+    - "Rute escolhendo ficar com Noemi"
+    - "Davi enfrentando Golias com uma funda"
+    - "Davi poupando a vida de Saul na caverna"
+    - "Salomao julgando a disputa entre duas maes"
+    - "Elias desafiando os profetas de Baal no Carmelo"
+    - "Elias alimentado pelos corvos no deserto"
+    - "Naama curado depois de sete banhos no Jordao"
+    - "Jonas engolido pelo grande peixe"
+    - "Os tres jovens na fornalha ardente"
+    - "Daniel na cova dos leoes"
+    - "Ester arriscando a vida diante do rei"
+    - "Jo perdendo tudo e permanecendo firme"
+    - "Neemias reconstruindo os muros sob ameaca"
+    - "A viuva de Sarepta e o pote de farinha que nao acabava"
+    # --- Santos e tradicao catolica ---
+    - "Sao Francisco de Assis renunciando a riqueza do pai"
+    - "Sao Francisco e o lobo de Gubbio"
+    - "Santa Clara deixando tudo para seguir Francisco"
+    - "Santo Antonio e o sermao aos peixes"
+    - "Sao Jose, o pai que confiou sem entender"
+    - "Nossa Senhora de Fatima e os tres pastorinhos"
+    - "Nossa Senhora de Lourdes e a menina Bernadette"
+    - "Nossa Senhora Aparecida encontrada no rio Paraiba"
+    - "Nossa Senhora de Guadalupe e as rosas no manto de Juan Diego"
+    - "Santa Teresinha e o caminho das coisas pequenas"
+    - "Santa Rita de Cassia e o perdao impossivel"
+    - "Sao Judas Tadeu, o santo das causas perdidas"
+    - "Sao Sebastiao amarrado e fiel"
+    - "Padre Pio e as marcas nas maos"
+    - "Madre Teresa nas ruas de Calcuta"
+    - "Santo Agostinho e a conversao no jardim"
+    - "Sao Paulo, de perseguidor a apostolo"
+    - "Sao Pedro, o pescador que virou pedra"
+    - "Frei Galvao, o primeiro santo brasileiro"
+    - "Santa Dulce dos Pobres e o hospital que nasceu de nada"
 
 captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
