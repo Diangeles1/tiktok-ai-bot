@@ -5,7 +5,9 @@ import random
 
 from groq import Groq
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-120b"
+MIN_NARRATION_WORDS = 170
+MAX_ATTEMPTS = 3
 
 PROMPT_TEMPLATE = """Voce e um roteirista de esquetes curtas de humor para TikTok/YouTube Shorts,
 estreladas por um personagem fixo chamado "{character_name}".
@@ -35,10 +37,8 @@ Responda APENAS com um JSON valido no formato:
 """
 
 
-def generate_script(character_name: str, character_vibe: str, niche: str,
-                     language: str, seed_topic: str | None = None) -> dict:
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
-
+def _request_script(client: Groq, model: str, character_name: str, character_vibe: str,
+                     niche: str, language: str, seed_topic: str | None) -> dict:
     prompt = PROMPT_TEMPLATE.format(
         character_name=character_name, character_vibe=character_vibe,
         niche=niche, language=language,
@@ -49,7 +49,7 @@ def generate_script(character_name: str, character_vibe: str, niche: str,
         prompt += f"\nEvite temas obvios/repetidos. Semente aleatoria: {random.randint(1, 999999)}\n"
 
     completion = client.chat.completions.create(
-        model=MODEL,
+        model=model,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.95,
         response_format={"type": "json_object"},
@@ -62,3 +62,29 @@ def generate_script(character_name: str, character_vibe: str, niche: str,
         raise ValueError(f"Resposta do LLM sem narracao valida: {content}")
 
     return data
+
+
+def generate_script(character_name: str, character_vibe: str, niche: str,
+                     language: str, seed_topic: str | None = None,
+                     model: str = MODEL, min_words: int = MIN_NARRATION_WORDS) -> dict:
+    """Gera o roteiro do dia. Tenta de novo quando a narracao vem curta demais:
+    o video precisa passar de 1 minuto para se qualificar aos programas de
+    monetizacao, e o LLM costuma devolver menos palavras do que o pedido."""
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+
+    best = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        data = _request_script(client, model, character_name, character_vibe,
+                                niche, language, seed_topic)
+        word_count = len(data["narration"].split())
+        if word_count >= min_words:
+            return data
+
+        if best is None or word_count > len(best["narration"].split()):
+            best = data
+        print(f"  [script] narracao com {word_count} palavras (minimo {min_words}). "
+              f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
+
+    print(f"  [script] AVISO: seguindo com {len(best['narration'].split())} palavras. "
+          f"O video pode ficar abaixo de 1 minuto e nao se qualificar para monetizacao.")
+    return best

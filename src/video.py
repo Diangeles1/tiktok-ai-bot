@@ -15,7 +15,8 @@ def build_video(character_image_path: str, audio_path: str, word_timings: list[d
                  width: int, height: int, fps: int, out_path: str,
                  words_per_chunk: int = 3, zoom_effect: bool = True,
                  tmp_dir: str = "output/_captions",
-                 laugh_path: str | None = None, laugh_gap: float = 0.4) -> str:
+                 laugh_path: str | None = None, laugh_gap: float = 0.4,
+                 caption_bottom_margin: int = 420) -> str:
     narration_clip = AudioFileClip(audio_path)
     narration_duration = narration_clip.duration
 
@@ -41,7 +42,7 @@ def build_video(character_image_path: str, audio_path: str, word_timings: list[d
             ImageClip(png_path)
             .set_start(chunk["start"])
             .set_duration(clip_duration)
-            .set_position(("center", height - png_height - 260))
+            .set_position(("center", height - png_height - caption_bottom_margin))
         )
         caption_clips.append(caption_clip)
 
@@ -61,6 +62,7 @@ def build_video(character_image_path: str, audio_path: str, word_timings: list[d
 
     final.close()
     bg.close()
+    narration_clip.close()
     for c in caption_clips:
         c.close()
 

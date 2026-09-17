@@ -37,7 +37,7 @@ Ele nao usa scraping nem automacao de navegador: esse tipo de tecnica viola os T
 | Etapa | Ferramenta | Funcao |
 |---|---|---|
 | 1 | [Pollinations.ai](https://pollinations.ai/) (gratuito, uma unica vez) | Gera e cacheia a imagem do personagem fixo |
-| 2 | [Groq](https://groq.com/) (LLM gratuito) | Escreve o roteiro: monologo do personagem, legenda e hashtags |
+| 2 | [Groq](https://groq.com/) (`openai/gpt-oss-120b`) | Escreve o roteiro: monologo do personagem, legenda e hashtags |
 | 3 | [edge-tts](https://github.com/rany2/edge-tts) (gratuito) | Narra o roteiro e retorna o timing de cada palavra |
 | 4 | MoviePy / ffmpeg | Monta o video: personagem com zoom leve, legendas animadas palavra a palavra e risada final |
 | 5 | TikTok Content Posting API | Publica no TikTok |
@@ -171,7 +171,10 @@ O cron ja esta configurado para rodar todo dia as 10h no horario de Brasilia.
 | `tts_voice` | Escolhe a voz do TTS (rode `edge-tts --list-voices` para ver as opcoes) |
 | `hashtags_extra` | Hashtags fixas adicionadas em todo video |
 | `tiktok.enabled` / `youtube.enabled` | Liga/desliga cada plataforma |
+| `script.model` | Modelo da Groq usado no roteiro. Confira a [pagina de modelos](https://console.groq.com/docs/models) antes de trocar, porque modelos sao descontinuados periodicamente |
+| `script.min_narration_words` | Minimo de palavras da narracao. Abaixo disso o roteiro e gerado de novo, para o video passar de 1 minuto |
 | `captions.words_per_chunk` | Controla quantas palavras aparecem por vez na legenda animada |
+| `captions.bottom_margin` | Distancia da legenda ate a base do video, em px. O padrao (420) mantem o texto acima da interface do TikTok |
 | `video.zoom_effect` | Liga/desliga o efeito de zoom (Ken Burns) |
 | `sfx.laugh_enabled` / `sfx.laugh_gap_seconds` | Adiciona uma risada de grupo apos o fim da narracao, escolhida aleatoriamente entre os arquivos em `assets/laughs/` (licenca livre do Mixkit). Adicione seus proprios mp3 nessa pasta para variar o efeito |
 | `src/script_gen.py` | Ajusta o prompt do roteiro: tom, formato, idioma |
