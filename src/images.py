@@ -5,9 +5,14 @@ import time
 import urllib.parse
 
 import requests
-from PIL import ImageFont
+from PIL import Image, ImageFont
 
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
+
+# A Pollinations grava a marca dela no rodape das imagens: o parametro
+# nologo=true so vale para contas pagas. Cortamos a faixa porque o TikTok
+# desqualifica da monetizacao conteudo com marca d'agua de outro app.
+WATERMARK_STRIP_RATIO = 0.05
 
 
 def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
@@ -34,6 +39,7 @@ def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
             resp.raise_for_status()
             with open(out_path, "wb") as f:
                 f.write(resp.content)
+            strip_watermark(out_path)
             return out_path
         except requests.RequestException as exc:
             last_exc = exc
@@ -43,6 +49,20 @@ def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
             time.sleep(wait)
 
     raise RuntimeError(f"Nao foi possivel gerar a imagem apos {retries} tentativas: {last_exc}")
+
+
+def strip_watermark(path: str, ratio: float = WATERMARK_STRIP_RATIO) -> str:
+    """Corta a faixa inferior da imagem, onde fica a marca d'agua da Pollinations."""
+    with Image.open(path) as img:
+        # a Pollinations responde JPEG: re-salvar como PNG multiplicaria o
+        # tamanho de um arquivo que fica commitado no repo
+        image_format = img.format
+        width, height = img.size
+        cropped = img.crop((0, 0, width, int(height * (1 - ratio))))
+
+    options = {"quality": 95} if image_format == "JPEG" else {}
+    cropped.save(path, format=image_format, **options)
+    return path
 
 
 def load_font(size: int) -> ImageFont.FreeTypeFont:
