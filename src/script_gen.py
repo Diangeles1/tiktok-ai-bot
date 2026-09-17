@@ -1,6 +1,7 @@
 """Geracao do roteiro diario (texto) usando a API gratuita da Groq."""
 import datetime
 import json
+import math
 import os
 import random
 
@@ -136,17 +137,49 @@ def scene_word_count(script: dict) -> int:
     return sum(len(scene["narration"].split()) for scene in script["scenes"])
 
 
-def topic_of_the_day(topics: list[str], today: datetime.date | None = None) -> str | None:
-    """Escolhe o tema girando pela lista, um por dia.
+def current_slot(hours_utc: list[int], now: datetime.datetime | None = None) -> int:
+    """Descobre qual publicacao do dia esta rodando, pelo horario mais proximo.
 
-    Sem isso o modelo repetiria sempre as historias mais famosas. Usa o dia
-    absoluto (toordinal) em vez do dia do ano, senao a virada de ano reiniciaria
-    o ciclo no meio. E deterministico: nao precisa guardar estado entre
-    execucoes e reexecutar no mesmo dia da o mesmo tema."""
+    Deduzir do relogio evita ter que passar o indice pelo workflow, e funciona
+    igual quando a execucao e disparada na mao."""
+    if not hours_utc:
+        return 0
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    minutes = now.hour * 60 + now.minute
+
+    def distance(hour: int) -> int:
+        diff = abs(minutes - hour * 60)
+        return min(diff, 1440 - diff)   # o dia e circular: 23h esta perto de 0h
+
+    return min(range(len(hours_utc)), key=lambda i: distance(hours_utc[i]))
+
+
+def _spread_stride(total: int) -> int:
+    """Passo usado para pular pela lista de temas em vez de seguir na ordem.
+
+    A lista vem agrupada por assunto, entao seguir em ordem publicaria tres
+    historias parecidas seguidas. O passo precisa ser coprimo com o total,
+    senao parte dos temas nunca seria sorteada."""
+    for candidate in range(max(1, total // 3), total):
+        if math.gcd(candidate, total) == 1:
+            return candidate
+    return 1
+
+
+def topic_of_the_day(topics: list[str], today: datetime.date | None = None,
+                      slot_index: int = 0, slot_count: int = 1) -> str | None:
+    """Escolhe o tema girando pela lista, um por publicacao.
+
+    Sem isso o modelo repetiria sempre as historias mais famosas. O indice
+    considera o horario da publicacao, senao as varias execucoes do mesmo dia
+    sairiam com o mesmo tema. Usa o dia absoluto (toordinal) em vez do dia do
+    ano, senao a virada de ano reiniciaria o ciclo no meio. E deterministico:
+    nao guarda estado entre execucoes."""
     if not topics:
         return None
     day = (today or datetime.date.today()).toordinal()
-    return topics[day % len(topics)]
+    position = day * max(1, slot_count) + slot_index
+    return topics[(position * _spread_stride(len(topics))) % len(topics)]
 
 
 def generate_scene_script(niche: str, language: str, seed_topic: str | None = None,
