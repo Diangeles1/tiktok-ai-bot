@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>TikTok OAuth callback</title>
+</head>
+<body style="font-family: sans-serif; max-width: 640px; margin: 40px auto;">
+  <h2>Autorizacao recebida</h2>
+  <p>Copie o valor abaixo e cole no terminal onde <code>python -m src.oauth_setup</code> esta rodando:</p>
+  <p><strong>code:</strong></p>
+  <pre id="code" style="background:#eee; padding:12px; word-break:break-all;"></pre>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById("code").textContent = params.get("code") || "(nenhum 'code' encontrado na URL)";
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Configuracao do conteudo gerado diariamente.
+# Edite "niche" para mudar o tema do canal.
+
+niche: "curiosidades e fatos cientificos surpreendentes"
+language: "pt-BR"
+tts_voice: "pt-BR-FranciscaNeural"   # rode `edge-tts --list-voices` para ver outras opcoes pt-BR
+
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  scenes: 5          # numero de cenas (imagem + narracao) por video
+
+privacy_level: "SELF_ONLY"  # apps nao auditados so podem postar como SELF_ONLY (rascunho privado)
+
+hashtags_extra:
+  - "#curiosidades"
+  - "#vocesabia"
+  - "#fatos"
+  - "#aprenderetiktok"
