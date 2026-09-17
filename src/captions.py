@@ -18,6 +18,12 @@ def build_chunks(word_timings: list[dict], words_per_chunk: int = 3) -> list[dic
             "start": group[0]["start"],
             "end": group[-1]["end"],
         })
+
+    # cada bloco dura ate o proximo comecar, senao a legenda pisca e some nas
+    # pausas naturais da narracao
+    for current, following in zip(chunks, chunks[1:]):
+        current["end"] = following["start"]
+
     return chunks
 
 

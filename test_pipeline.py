@@ -36,5 +36,6 @@ out = video.build_video(
     words_per_chunk=cfg["captions"]["words_per_chunk"], zoom_effect=cfg["video"]["zoom_effect"],
     tmp_dir=f"{run_dir}/_captions",
     laugh_path=laugh_path, laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
+    caption_bottom_margin=cfg["captions"].get("bottom_margin", 420),
 )
 print(f"OK -> {out} ({os.path.getsize(out) / 1024:.1f} KB)")

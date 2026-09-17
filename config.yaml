@@ -24,8 +24,13 @@ video:
   fps: 30
   zoom_effect: true     # leve zoom (Ken Burns) na imagem do personagem, ao inves de imagem parada
 
+script:
+  model: "openai/gpt-oss-120b"   # modelo da Groq usado para escrever o roteiro
+  min_narration_words: 170       # abaixo disso o roteiro e gerado de novo (video precisa passar de 1 min)
+
 captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
+  bottom_margin: 420    # distancia da legenda ate a base, em px (a interface do TikTok cobre o rodape)
 
 sfx:
   laugh_enabled: true   # adiciona uma risada de grupo (assets/laughs/*.mp3, escolhida aleatoriamente) no final do video
