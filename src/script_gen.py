@@ -1,4 +1,5 @@
 """Geracao do roteiro diario (texto) usando a API gratuita da Groq."""
+import datetime
 import json
 import os
 import random
@@ -62,6 +63,9 @@ Regras das cenas:
   celular, jornal): o gerador nao desenha texto legivel e a cena sai borrada.
   Mostre a mesma ideia por outro caminho, por exemplo uma porta fechada em vez de
   uma placa de "fechado".
+- Prefira plano aberto ou medio, mostrando lugar e objeto. Evite close de parte
+  do corpo (maos, olhos, rosto): nesse gerador o close costuma virar um rosto
+  aleatorio que nao tem nada a ver com a cena.
 - Sem rosto de pessoa real ou celebridade, sem logo nem marca registrada.
 - O visual precisa combinar com o que esta sendo narrado naquele trecho.
 
@@ -78,13 +82,16 @@ Responda APENAS com um JSON valido no formato:
 
 
 def _request_scene_script(client: Groq, model: str, niche: str, language: str,
-                           min_words: int, max_words: int, seed_topic: str | None) -> dict:
+                           min_words: int, max_words: int, seed_topic: str | None,
+                           extra_rules: str | None = None) -> dict:
     prompt = SCENE_PROMPT_TEMPLATE.format(
         niche=niche, language=language, min_words=min_words, max_words=max_words,
         min_scenes=MIN_SCENES, max_scenes=MAX_SCENES,
     )
+    if extra_rules:
+        prompt += f"\nRegras adicionais deste canal:\n{extra_rules}\n"
     if seed_topic:
-        prompt += f"\nTema sugerido para hoje (use como inspiracao): {seed_topic}\n"
+        prompt += f"\nTema de hoje (mantenha este tema): {seed_topic}\n"
     else:
         prompt += f"\nEvite temas obvios/repetidos. Semente aleatoria: {random.randint(1, 999999)}\n"
 
@@ -112,9 +119,22 @@ def scene_word_count(script: dict) -> int:
     return sum(len(scene["narration"].split()) for scene in script["scenes"])
 
 
+def topic_of_the_day(topics: list[str], today: datetime.date | None = None) -> str | None:
+    """Escolhe o tema girando pela lista, um por dia.
+
+    Sem isso o modelo repetiria sempre as historias mais famosas. Usa o dia
+    absoluto (toordinal) em vez do dia do ano, senao a virada de ano reiniciaria
+    o ciclo no meio. E deterministico: nao precisa guardar estado entre
+    execucoes e reexecutar no mesmo dia da o mesmo tema."""
+    if not topics:
+        return None
+    day = (today or datetime.date.today()).toordinal()
+    return topics[day % len(topics)]
+
+
 def generate_scene_script(niche: str, language: str, seed_topic: str | None = None,
                            model: str = MODEL, min_words: int = MIN_NARRATION_WORDS,
-                           max_words: int = 220) -> dict:
+                           max_words: int = 220, extra_rules: str | None = None) -> dict:
     """Gera o roteiro do dia dividido em cenas, para o formato narrado sobre
     imagens que mudam. Mesma politica de retentativa do formato de personagem:
     narracao curta demais nao passa de 1 minuto e perde a monetizacao."""
@@ -123,7 +143,7 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
     best = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         data = _request_scene_script(client, model, niche, language,
-                                      min_words, max_words, seed_topic)
+                                      min_words, max_words, seed_topic, extra_rules)
         word_count = scene_word_count(data)
         if word_count >= min_words:
             return data
