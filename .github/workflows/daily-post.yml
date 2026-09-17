@@ -17,7 +17,9 @@ permissions:
 jobs:
   generate-and-post:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # o formato em cenas gera uma imagem por cena e renderiza movimento de camera
+    # quadro a quadro, entao o render leva bem mais que o do personagem fixo
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 

@@ -11,7 +11,7 @@ from moviepy.editor import (AudioFileClip, CompositeAudioClip, CompositeVideoCli
                              ImageClip, VideoClip)
 from PIL import Image
 
-from src.captions import build_chunks, render_caption_png
+from src.captions import build_chunks, render_chunk
 
 
 def _ease(progress: float) -> float:
@@ -59,6 +59,23 @@ def _camera_move(image_path: str, duration: float, width: int, height: int, move
         return np.asarray(frame)
 
     return VideoClip(make_frame, duration=duration)
+
+
+def _pop(clip, canvas_w: int, canvas_h: int, center_y: float,
+          duration: float = 0.14, start_scale: float = 0.84):
+    """Entrada da legenda: cresce rapido ate o tamanho normal. A posicao e
+    recalculada junto com a escala para o centro do texto ficar parado, senao a
+    legenda escorrega pela tela enquanto cresce."""
+    def scale(t):
+        if t >= duration:
+            return 1.0
+        return start_scale + (1 - start_scale) * _ease(t / duration)
+
+    def position(t):
+        current = scale(t)
+        return (canvas_w * (1 - current) / 2, center_y - canvas_h * current / 2)
+
+    return clip.resize(scale).set_position(position)
 
 
 def _build_audio(scenes: list[dict], narration_end: float, total: float,
@@ -116,13 +133,22 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
     os.makedirs(tmp_dir, exist_ok=True)
     timings = [t for scene in scenes for t in scene["timings"]]
     for i, chunk in enumerate(build_chunks(timings, words_per_chunk)):
-        png_path, png_height = render_caption_png(chunk["text"], width, f"{tmp_dir}/cap_{i}.png")
-        caption_clips.append(
-            ImageClip(png_path)
-            .set_start(chunk["start"])
-            .set_duration(max(0.05, chunk["end"] - chunk["start"]))
-            .set_position(("center", height - png_height - caption_bottom_margin))
-        )
+        words = chunk["words"]
+        paths, png_height = render_chunk([w["text"] for w in words], width,
+                                          f"{tmp_dir}/cap_{i:03d}")
+        center_y = height - caption_bottom_margin - png_height / 2
+
+        for j, path in enumerate(paths):
+            # a palavra destacada troca quando a proxima comeca a ser falada; a
+            # ultima do bloco segura ate o bloco acabar, para nao piscar na pausa
+            start = words[j]["start"]
+            end = words[j + 1]["start"] if j + 1 < len(words) else chunk["end"]
+            clip = ImageClip(path).set_start(start).set_duration(max(0.05, end - start))
+            if j == 0:
+                clip = _pop(clip, width, png_height, center_y)
+            else:
+                clip = clip.set_position((0, center_y - png_height / 2))
+            caption_clips.append(clip)
 
     audio, audio_tracks = _build_audio(scenes, narration_end, total,
                                         laugh_path, laugh_gap, music_path, music_volume)
