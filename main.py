@@ -7,6 +7,7 @@ Dois formatos, escolhidos em content_mode no config.yaml:
  - "cenas": narracao por cima de imagens que mudam (canal dark)
  - "personagem": monologo do personagem fixo, uma imagem so"""
 import datetime
+import json
 import os
 
 import yaml
@@ -26,11 +27,15 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
     script_cfg = cfg.get("script", {})
     hours = cfg.get("posting_hours_utc", [])
     slot = script_gen.current_slot(hours)
+    slot_count = max(1, len(hours))
     seed_topic = script_gen.topic_of_the_day(
-        script_cfg.get("topics", []), slot_index=slot, slot_count=max(1, len(hours)),
+        script_cfg.get("topics", []), slot_index=slot, slot_count=slot_count,
     )
-    print(f"[1/4] Gerando roteiro em cenas "
-          f"(publicacao {slot + 1} de {max(1, len(hours))}, tema: {seed_topic or 'livre'})")
+    hook = script_gen.hook_of_the_slot(
+        script_cfg.get("hooks", []), slot_index=slot, slot_count=slot_count,
+    )
+    print(f"[1/4] Gerando roteiro em cenas (publicacao {slot + 1} de {slot_count}, "
+          f"tema: {seed_topic or 'livre'}, gancho: {hook['name'] if hook else 'livre'})")
     script = script_gen.generate_scene_script(
         niche=cfg["niche"],
         language=cfg["language"],
@@ -39,7 +44,9 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         min_words=script_cfg.get("min_narration_words", script_gen.MIN_NARRATION_WORDS),
         max_words=script_cfg.get("max_narration_words", 220),
         extra_rules=script_cfg.get("extra_rules"),
+        hook=hook,
     )
+    script["_hook"] = hook["name"] if hook else None
     scenes = script["scenes"]
     print(f"  Tema de hoje: {script['topic']} "
           f"({script_gen.scene_word_count(script)} palavras em {len(scenes)} cenas)")
@@ -149,9 +156,25 @@ def main() -> None:
         f"{script['caption']}\n\n{script.get('topic', '')}\n\n{tag_line}".strip()
     )
 
+    # guarda o que foi usado para depois cruzar com a retencao no YouTube Studio
+    # e descobrir qual estilo de gancho prende mais
+    with open(os.path.join(run_dir, "metadata.json"), "w", encoding="utf-8") as f:
+        json.dump({
+            "data": today,
+            "publicacao": slot + 1,
+            "gancho": script.get("_hook"),
+            "tema": seed_topic,
+            "primeira_frase": scenes[0]["narration"],
+            "duracao_segundos": round(total, 1),
+            "hashtags": tags,
+            "titulo_youtube": youtube_title,
+        }, f, ensure_ascii=False, indent=2)
+
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
     if dry_run:
         print(f"[5/5] DRY_RUN=true, pulando publicacao. Video pronto em: {video_path}")
+        print(f"  Gancho usado: {script.get('_hook')}")
+        print(f"  Primeira frase: {scenes[0]['narration']}")
         print(f"  Hashtags ({len(tags)}): {tag_line}")
         print(f"  Titulo TikTok:  {tiktok_title}")
         print(f"  Titulo YouTube: {youtube_title} ({len(youtube_title)} caracteres)")
