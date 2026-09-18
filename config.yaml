@@ -78,6 +78,33 @@ script:
       silhueta a distancia. Evite rosto em close de figura sagrada: o gerador de
       imagens erra rosto com frequencia e o resultado fica irreverente.
 
+  # Estilos de abertura, girando um por publicacao. A primeira frase e o que
+  # decide a retencao, e girar entre formatos serve para MEDIR: com um estilo
+  # fixo nao da para saber qual prende mais. O nome de cada um sai no log e no
+  # metadata.json do video, entao depois de umas semanas voce compara a
+  # retencao no YouTube Studio e mantem so os que ganharam.
+  hooks:
+    - name: "pergunta"
+      instruction: >
+        Abra com uma pergunta direta ao espectador que ele nao consiga responder
+        sem assistir ao video inteiro.
+    - name: "meio-da-acao"
+      instruction: >
+        Comece no instante de maior tensao da historia, sem nenhuma apresentacao.
+        O contexto aparece so depois, na segunda ou terceira cena.
+    - name: "contraintuitivo"
+      instruction: >
+        Abra com uma afirmacao que soe improvavel ou contraditoria, e que a
+        historia so explica no final.
+    - name: "detalhe-estranho"
+      instruction: >
+        Abra citando um detalhe concreto e curioso da historia, algo especifico
+        e inesperado que faca a pessoa querer entender de onde aquilo vem.
+    - name: "final-primeiro"
+      instruction: >
+        Abra revelando o resultado final da historia e depois volte para contar
+        como se chegou ate ali.
+
   # Um tema por publicacao, girando pela lista. Sem isso o modelo repetiria
   # sempre as historias mais famosas, e as tres execucoes do mesmo dia sairiam
   # iguais. Deterministico e sem estado entre execucoes.

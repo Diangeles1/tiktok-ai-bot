@@ -5,11 +5,12 @@ import math
 import os
 import random
 
-from groq import Groq
+from groq import BadRequestError, Groq
 
 MODEL = "openai/gpt-oss-120b"
 MIN_NARRATION_WORDS = 170
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 3      # tentativas por narracao curta demais
+JSON_ATTEMPTS = 3     # tentativas por JSON invalido devolvido pelo modelo
 MIN_SCENES = 8
 MAX_SCENES = 14
 
@@ -57,7 +58,10 @@ Crie UM video novo e ORIGINAL, narrado em {language}, sobre: {niche}
 Regras da narracao:
 - Somando todas as cenas, de {min_words} a {max_words} palavras (o video precisa
   passar de 1 minuto, requisito minimo de programas de monetizacao).
-- Gancho forte na primeira frase, que faca a pessoa parar de rolar o feed.
+- A primeira frase decide se a pessoa fica ou rola o feed. Ela tem que valer
+  sozinha, em menos de dois segundos de fala. Nao comece apresentando contexto
+  ("havia um homem chamado", "em uma terra distante", "muitos anos atras"):
+  isso e o jeito mais rapido de perder o espectador.
 - Final que deixe a pessoa querendo o proximo video, sem parecer propaganda.
 - Fala natural e corrida, sem emoji, sem markdown e sem citar numero de cena.
 - Nada ofensivo, discriminatorio, sexual ou perigoso.
@@ -74,6 +78,8 @@ Regras das cenas:
 - Prefira plano aberto ou medio, mostrando lugar e objeto. Evite close de parte
   do corpo (maos, olhos, rosto): nesse gerador o close costuma virar um rosto
   aleatorio que nao tem nada a ver com a cena.
+- A imagem da PRIMEIRA cena tem que ser a mais impactante de todas. Ela aparece
+  junto com a primeira frase e segura o espectador tanto quanto o texto.
 - Sem rosto de pessoa real ou celebridade, sem logo nem marca registrada.
 - O visual precisa combinar com o que esta sendo narrado naquele trecho.
 
@@ -90,9 +96,19 @@ Responda APENAS com um JSON valido no formato:
 """
 
 
+def _is_malformed_json_error(exc: Exception) -> bool:
+    """O modelo as vezes emite JSON quebrado (ja vimos aspa de abertura faltando
+    no meio do objeto) e a Groq responde 400 json_validate_failed. E intermitente
+    e vale tentar de novo; erro de chave ou de cota nao vale, tem que falhar na
+    hora em vez de queimar tentativas."""
+    if isinstance(exc, json.JSONDecodeError):
+        return True
+    return isinstance(exc, BadRequestError) and "json_validate_failed" in str(exc)
+
+
 def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
     """Pede o roteiro em JSON e devolve o dict. Ver REASONING_EFFORT: sem ele o
-    modo JSON deste modelo falha."""
+    modo JSON deste modelo falha sempre."""
     params = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -103,19 +119,29 @@ def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
     if REASONING_EFFORT:
         params["reasoning_effort"] = REASONING_EFFORT
 
-    content = client.chat.completions.create(**params).choices[0].message.content
-    return json.loads(content)
+    for attempt in range(1, JSON_ATTEMPTS + 1):
+        try:
+            content = client.chat.completions.create(**params).choices[0].message.content
+            return json.loads(content)
+        except Exception as exc:
+            if not _is_malformed_json_error(exc) or attempt == JSON_ATTEMPTS:
+                raise
+            print(f"  [script] o modelo devolveu JSON invalido, tentando de novo "
+                  f"({attempt}/{JSON_ATTEMPTS}).")
 
 
 def _request_scene_script(client: Groq, model: str, niche: str, language: str,
                            min_words: int, max_words: int, seed_topic: str | None,
-                           extra_rules: str | None = None) -> dict:
+                           extra_rules: str | None = None,
+                           hook: dict | None = None) -> dict:
     prompt = SCENE_PROMPT_TEMPLATE.format(
         niche=niche, language=language, min_words=min_words, max_words=max_words,
         min_scenes=MIN_SCENES, max_scenes=MAX_SCENES,
     )
     if extra_rules:
         prompt += f"\nRegras adicionais deste canal:\n{extra_rules}\n"
+    if hook:
+        prompt += (f"\nFormato obrigatorio da primeira frase: {hook['instruction']}\n")
     if seed_topic:
         prompt += f"\nTema de hoje (mantenha este tema): {seed_topic}\n"
     else:
@@ -166,6 +192,20 @@ def _spread_stride(total: int) -> int:
     return 1
 
 
+def hook_of_the_slot(hooks: list[dict], today: datetime.date | None = None,
+                      slot_index: int = 0, slot_count: int = 1) -> dict | None:
+    """Escolhe o estilo de abertura da vez, girando pela lista.
+
+    Girar serve para medir: com um estilo fixo em todo video nao da para saber
+    qual prende mais. Como a quantidade de estilos e muito menor que a de temas,
+    cada estilo acaba testado em temas variados, o que separa o efeito do gancho
+    do efeito da historia."""
+    if not hooks:
+        return None
+    day = (today or datetime.date.today()).toordinal()
+    return hooks[(day * max(1, slot_count) + slot_index) % len(hooks)]
+
+
 def topic_of_the_day(topics: list[str], today: datetime.date | None = None,
                       slot_index: int = 0, slot_count: int = 1) -> str | None:
     """Escolhe o tema girando pela lista, um por publicacao.
@@ -184,7 +224,8 @@ def topic_of_the_day(topics: list[str], today: datetime.date | None = None,
 
 def generate_scene_script(niche: str, language: str, seed_topic: str | None = None,
                            model: str = MODEL, min_words: int = MIN_NARRATION_WORDS,
-                           max_words: int = 220, extra_rules: str | None = None) -> dict:
+                           max_words: int = 220, extra_rules: str | None = None,
+                           hook: dict | None = None) -> dict:
     """Gera o roteiro do dia dividido em cenas, para o formato narrado sobre
     imagens que mudam. Mesma politica de retentativa do formato de personagem:
     narracao curta demais nao passa de 1 minuto e perde a monetizacao."""
@@ -192,8 +233,8 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
 
     best = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        data = _request_scene_script(client, model, niche, language,
-                                      min_words, max_words, seed_topic, extra_rules)
+        data = _request_scene_script(client, model, niche, language, min_words,
+                                      max_words, seed_topic, extra_rules, hook)
         word_count = scene_word_count(data)
         if word_count >= min_words:
             return data

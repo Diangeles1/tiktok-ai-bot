@@ -57,5 +57,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: video-${{ github.run_id }}
-          path: output/**/final.mp4
+          # o metadata.json diz qual gancho e tema foram usados, para cruzar com
+          # a retencao no YouTube Studio depois
+          path: |
+            output/**/final.mp4
+            output/**/thumbnail.jpg
+            output/**/metadata.json
           retention-days: 14
