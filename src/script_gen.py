@@ -96,6 +96,32 @@ Responda APENAS com um JSON valido no formato:
 """
 
 
+# O modelo as vezes devolve pontuacao tipografica no lugar da comum: hifen
+# nao-separavel, travessao, aspa curva, reticencia de um caractere so. Isso
+# quebra em tres lugares: a fonte da legenda pode nao ter o glifo e desenhar um
+# quadrado, o edge-tts tropeca na leitura, e no console do Windows o print
+# levanta UnicodeEncodeError e derruba a execucao inteira.
+_PUNCTUATION_FIXES = {
+    0x2010: "-", 0x2011: "-", 0x2012: "-", 0x2013: "-", 0x2014: "-", 0x2015: "-",
+    0x2018: "'", 0x2019: "'", 0x201A: "'", 0x201B: "'",
+    0x201C: '"', 0x201D: '"', 0x201E: '"',
+    0x2026: "...", 0x00A0: " ", 0x202F: " ", 0x2009: " ",
+    0x200B: "", 0x200C: "", 0x200D: "", 0x2060: "", 0xFEFF: "",
+}
+
+
+def sanitize(value):
+    """Troca pontuacao tipografica pela equivalente comum, em todo texto que o
+    modelo devolveu (funciona recursivamente em dict e lista)."""
+    if isinstance(value, str):
+        return value.translate(_PUNCTUATION_FIXES)
+    if isinstance(value, dict):
+        return {k: sanitize(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [sanitize(v) for v in value]
+    return value
+
+
 def _is_malformed_json_error(exc: Exception) -> bool:
     """O modelo as vezes emite JSON quebrado (ja vimos aspa de abertura faltando
     no meio do objeto) e a Groq responde 400 json_validate_failed. E intermitente
@@ -122,7 +148,7 @@ def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
     for attempt in range(1, JSON_ATTEMPTS + 1):
         try:
             content = client.chat.completions.create(**params).choices[0].message.content
-            return json.loads(content)
+            return sanitize(json.loads(content))
         except Exception as exc:
             if not _is_malformed_json_error(exc) or attempt == JSON_ATTEMPTS:
                 raise
