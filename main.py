@@ -11,8 +11,8 @@ import os
 
 import yaml
 
-from src import (character, github_secrets, scenes as scenes_mod, script_gen, sfx,
-                 thumbnail, tiktok_api, video, youtube_api)
+from src import (character, github_secrets, hashtags, scenes as scenes_mod, script_gen,
+                 sfx, thumbnail, tiktok_api, video, youtube_api)
 
 OUTPUT_DIR = "output"
 
@@ -136,14 +136,25 @@ def main() -> None:
         )
         print(f"  Capa: \"{cover_text}\"")
 
-    hashtags = " ".join(script.get("hashtags", []) + cfg.get("hashtags_extra", []))
-    title = f"{script['caption']} {hashtags}".strip()
-    description = f"{script['caption']}\n\n{script.get('topic', '')}\n\n{hashtags}".strip()
+    # as do video vem primeiro: sao elas que o YouTube exibe ao lado do titulo
+    tags = hashtags.build(script.get("hashtags", []), cfg.get("hashtags_extra", []))
+    tag_line = " ".join(tags)
+
+    # o TikTok junta tudo numa legenda so. No YouTube o titulo tem 100
+    # caracteres: enfiar hashtag ali corta o texto no meio e perde as ultimas,
+    # entao elas vao para a descricao, de onde o YouTube ja as le.
+    tiktok_title = f"{script['caption']} {tag_line}".strip()
+    youtube_title = script["caption"].strip()
+    youtube_description = (
+        f"{script['caption']}\n\n{script.get('topic', '')}\n\n{tag_line}".strip()
+    )
 
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
     if dry_run:
         print(f"[5/5] DRY_RUN=true, pulando publicacao. Video pronto em: {video_path}")
-        print(f"  Titulo que seria usado: {title}")
+        print(f"  Hashtags ({len(tags)}): {tag_line}")
+        print(f"  Titulo TikTok:  {tiktok_title}")
+        print(f"  Titulo YouTube: {youtube_title} ({len(youtube_title)} caracteres)")
         return
 
     print("[5/5] Publicando")
@@ -152,7 +163,7 @@ def main() -> None:
 
     if tiktok_cfg.get("enabled", True):
         try:
-            _post_to_tiktok(video_path, title, tiktok_cfg)
+            _post_to_tiktok(video_path, tiktok_title, tiktok_cfg)
         except Exception as exc:
             print(f"  [tiktok] FALHOU: {exc}")
     else:
@@ -160,7 +171,8 @@ def main() -> None:
 
     if youtube_cfg.get("enabled", True):
         try:
-            _post_to_youtube(video_path, title, description, youtube_cfg, thumbnail_path)
+            _post_to_youtube(video_path, youtube_title, youtube_description,
+                              youtube_cfg, thumbnail_path)
         except Exception as exc:
             print(f"  [youtube] FALHOU: {exc}")
     else:
