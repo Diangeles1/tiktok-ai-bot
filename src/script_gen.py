@@ -103,23 +103,28 @@ Regras das cenas:
 - Sem rosto de pessoa real ou celebridade, sem logo nem marca registrada.
 - O visual precisa combinar com o que esta sendo narrado naquele trecho.
 
-Regras da capa (campo "thumbnail"):
+Regras da capa (campo "thumbnail", o ultimo do JSON):
+- Escreva a capa DEPOIS das cenas, como resumo do que voce acabou de narrar.
 - Uma frase curta que se le de uma vez, de 3 a 6 palavras, com gramatica e
   ortografia corretas. Nunca lista de palavras separadas por virgula.
 - Escreva em letra normal, NAO em caixa alta: o programa converte depois.
 - A capa resume a historia DESTE video, e nao outro episodio do mesmo
   personagem. Prefira palavras que aparecem na sua propria narracao.
+- A capa tem que ser verdadeira para a passagem. Cada verbo diz o que a pessoa
+  FEZ no texto: nao troque a acao por outra mais forte para chamar atencao
+  (recusar perdao nao e trair, duvidar nao e negar) e nao atribua a ninguem
+  culpa, motivo ou resultado que o texto nao registra.
 
 Responda APENAS com um JSON valido no formato:
 {{
   "topic": "assunto especifico do video de hoje",
   "passagem": "livro, capitulo e versiculos da historia contada, ou a fonte da tradicao",
   "caption": "legenda curta e chamativa (max 150 caracteres)",
-  "thumbnail": "frase de capa com 3 a 6 palavras, em letra normal",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4"],
   "scenes": [
     {{"narration": "trecho narrado desta cena", "visual": "image prompt in English"}}
-  ]
+  ],
+  "thumbnail": "frase de capa com 3 a 6 palavras, em letra normal, fiel ao que foi narrado"
 }}
 """
 
@@ -235,7 +240,16 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
     if hook:
         prompt += (f"\nFormato obrigatorio da primeira frase (fiel a passagem: sem inventar fato nem exagerar detalhe para chamar atencao): {hook['instruction']}\n")
     if arc:
-        prompt += (f"\nEstrutura obrigatoria da historia: {arc['instruction']}\n")
+        # "obrigatoria" fazia o modelo torcer a passagem para caber no molde: a
+        # parabola do servo que nao perdoou ganhou final feliz no arco de
+        # inversao, e a negacao de Pedro ganhou perdao "na manha seguinte" no
+        # arco de resgate. A passagem manda, o arco so organiza.
+        prompt += (f"\nEstrutura da historia: {arc['instruction']} Use essa estrutura "
+                   f"so com o que a passagem de fato conta. Se a passagem nao tiver esse "
+                   f"formato, siga a passagem: nunca invente, inverta ou acrescente "
+                   f"acontecimento para caber na estrutura. Se a passagem termina no "
+                   f"choro, o video termina no choro, sem o consolo que so vem em outra "
+                   f"passagem.\n")
     if cta:
         prompt += (f"\nChamada para acao: {cta}\n")
     if seed_topic:
@@ -362,8 +376,8 @@ def rotate_by_slot(items: list[dict], today: datetime.date | None = None,
     """Escolhe um item da lista girando por dia e por publicacao.
 
     Usada para ganchos e para arcos narrativos. Como as duas listas tem
-    tamanhos diferentes (5 e 6, que sao coprimos), a combinacao gancho+arco so
-    se repete depois de 30 publicacoes, em vez de travar sempre no mesmo par."""
+    tamanhos coprimos (4 e 7), a combinacao gancho+arco so se repete depois de
+    28 publicacoes, em vez de travar sempre no mesmo par."""
     if not items:
         return None
     day = (today or datetime.date.today()).toordinal()
