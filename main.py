@@ -9,6 +9,7 @@ Dois formatos, escolhidos em content_mode no config.yaml:
 import datetime
 import json
 import os
+import sys
 
 import yaml
 
@@ -16,6 +17,12 @@ from src import (character, github_secrets, hashtags, scenes as scenes_mod, scri
                  sfx, thumbnail, tiktok_api, video, youtube_api)
 
 OUTPUT_DIR = "output"
+
+# No console do Windows (cp1252) um caractere fora da tabela faz o print
+# levantar UnicodeEncodeError. Sem isso, uma linha de log derruba um render de
+# dez minutos que ja estava quase pronto.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def load_config() -> dict:
@@ -46,7 +53,9 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         extra_rules=script_cfg.get("extra_rules"),
         hook=hook,
     )
+    # guardados para o metadata.json, que e montado la no main()
     script["_hook"] = hook["name"] if hook else None
+    script["_seed_topic"] = seed_topic
     scenes = script["scenes"]
     print(f"  Tema de hoje: {script['topic']} "
           f"({script_gen.scene_word_count(script)} palavras em {len(scenes)} cenas)")
@@ -161,9 +170,9 @@ def main() -> None:
     with open(os.path.join(run_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump({
             "data": today,
-            "publicacao": slot + 1,
+            "publicacao": slot_suffix,
             "gancho": script.get("_hook"),
-            "tema": seed_topic,
+            "tema": script.get("_seed_topic"),
             "primeira_frase": scenes[0]["narration"],
             "duracao_segundos": round(total, 1),
             "hashtags": tags,
