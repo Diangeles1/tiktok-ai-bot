@@ -13,7 +13,7 @@ pelas APIs oficiais das duas plataformas, rodando de graça no GitHub Actions.
 [![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-3x_ao_dia-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/features/actions)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-MoviePy-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 
-[Resultado](#resultado) · [Como funciona](#como-funciona) · [Estratégia](#estratégia-em-duas-fases) · [Publicação](#publicação-no-tiktok) · [Setup](#setup-passo-a-passo) · [Customização](#customização) · [Rodando localmente](#rodando-localmente)
+[Resultado](#resultado) · [Como funciona](#como-funciona) · [Estratégia](#estratégia-em-duas-fases) · [Publicação](#publicação-no-tiktok) · [Setup](#setup-passo-a-passo) · [Customização](#customização) · [Painel](#painel-local) · [Rodando localmente](#rodando-localmente)
 
 </div>
 
@@ -310,6 +310,35 @@ Tudo abaixo fica em `config.yaml`.
 | `youtube.privacy_status` | `public`, `unlisted` ou `private` |
 | `content_mode` | `cenas` (padrão) ou `personagem`, o formato antigo de monólogo com personagem fixo (gerado com `python -m src.generate_character`) |
 
+## Painel local
+
+Para acompanhar a geração e publicar com um clique, sem terminal:
+
+```bash
+python painel.py
+```
+
+No Windows, também dá para abrir com dois cliques em `painel.bat`. O painel abre no
+navegador e mostra:
+
++ **Novo vídeo:** o tema da vez, qualquer outro da lista ou um escrito na hora, com o
+  gancho e o arco que vão ser usados
++ **Geração ao vivo:** as cinco etapas, cada imagem de cena aparecendo assim que fica
+  pronta e o log completo
++ **Conferência:** o vídeo no player, a capa, a passagem declarada e a legenda pronta
+  para copiar
++ **Publicação:** TikTok, YouTube ou os dois, sempre com confirmação antes de enviar
++ **Histórico:** todos os vídeos gerados, com o que já saiu em cada plataforma
+
+O painel roda só na sua máquina (endereço `127.0.0.1`, inacessível de fora) e usa as
+chaves do `.env`, que nunca aparecem na página. A geração é o mesmo `main.py` do GitHub
+Actions, então o vídeo sai igual ao da publicação automática. Se o TikTok renovar o
+token durante uma publicação, o valor novo é gravado no `.env` e, com `GH_PAT`
+configurado, também nos Secrets do repositório.
+
+O tema da vez é o mesmo que a publicação automática daquele horário vai usar. Se for
+publicar pelo painel e pelo agendamento no mesmo dia, escolha outro tema na lista.
+
 ## Rodando localmente
 
 ```bash
@@ -330,6 +359,11 @@ $env:DRY_RUN = "true"; python main.py
 ```
 
 O vídeo fica em `output/<data>_<publicação>/`, junto com a capa e o `metadata.json`.
+Para publicar depois um vídeo já gerado, sem gerar outro:
+
+```bash
+python main.py --publicar output/2026-09-18_2 --plataformas youtube
+```
 
 Para testar só a montagem (imagens, narração, legendas, trilha e capa) com um roteiro
 fixo, sem chamar a Groq e sem publicar nada:
@@ -343,6 +377,7 @@ python test_pipeline.py
 | Arquivo | Papel |
 |---|---|
 | `main.py` | Orquestra o pipeline e a publicação |
+| `painel.py` / `web/painel.html` | Painel local: geração ao vivo, conferência e publicação |
 | `src/script_gen.py` | Prompt, rotações e validação do roteiro |
 | `src/images.py` / `src/scenes.py` | Imagem de cada cena e linha do tempo da narração |
 | `src/tts.py` / `src/captions.py` | Narração com timing por palavra e legendas |
