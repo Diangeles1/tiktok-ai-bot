@@ -181,7 +181,7 @@ def main() -> None:
     thumb_cfg = cfg.get("thumbnail", {})
     thumbnail_path = None
     if thumb_cfg.get("enabled", True):
-        cover_text = script.get("thumbnail") or script.get("topic", "")
+        cover_text = script_gen.cover_text(script, max_words=thumb_cfg.get("max_words", 6))
         thumbnail_path = thumbnail.build_thumbnail(
             scene_image=scenes[0]["image"],
             text=cover_text,

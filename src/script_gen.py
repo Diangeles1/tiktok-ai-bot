@@ -94,11 +94,18 @@ Regras das cenas:
 - Sem rosto de pessoa real ou celebridade, sem logo nem marca registrada.
 - O visual precisa combinar com o que esta sendo narrado naquele trecho.
 
+Regras da capa (campo "thumbnail"):
+- Uma frase curta que se le de uma vez, de 3 a 6 palavras, com gramatica e
+  ortografia corretas. Nunca lista de palavras separadas por virgula.
+- Escreva em letra normal, NAO em caixa alta: o programa converte depois.
+- A capa resume a historia DESTE video, e nao outro episodio do mesmo
+  personagem. Prefira palavras que aparecem na sua propria narracao.
+
 Responda APENAS com um JSON valido no formato:
 {{
   "topic": "assunto especifico do video de hoje",
   "caption": "legenda curta e chamativa (max 150 caracteres)",
-  "thumbnail": "3 a 6 palavras de impacto para a capa, em caixa alta",
+  "thumbnail": "frase de capa com 3 a 6 palavras, em letra normal",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4"],
   "scenes": [
     {{"narration": "trecho narrado desta cena", "visual": "image prompt in English"}}
@@ -232,6 +239,43 @@ def enforce_wide_framing(scenes: list[dict]) -> int:
             print(f"  [script] AVISO: cena {i + 1} ainda cita parte do corpo "
                   f"({_BODY_RE.search(scene['visual']).group(0)}); o gerador pode errar.")
     return fixed
+
+
+# A capa e a primeira coisa que aparece na prateleira do canal, e erro ali
+# custa clique. O modelo errava ortografia ("QUARENTAS NOITES DE SEDA") porque o
+# prompt pedia a capa em caixa alta, e modelo de linguagem escreve pior assim.
+# Pedindo letra normal (o thumbnail.py converte), 6 de 6 capas de teste sairam
+# corretas. Uma checagem por vocabulario da narracao chegou a ser feita e foi
+# removida: rejeitou 3 de 6 capas boas por flexao ("revelam" x "revelou"),
+# trocou-as por capas piores e nao pegou o unico erro real (capa sobre outro
+# episodio). Ficam so as checagens de forma.
+_COVER_STOPWORDS = {"a", "o", "as", "os", "e", "de", "da", "do", "das", "dos", "em",
+                    "no", "na", "nos", "nas", "um", "uma", "com", "por", "para",
+                    "que", "ao", "se"}
+
+
+def cover_text(script: dict, max_words: int = 6) -> str:
+    """Devolve o texto da capa. Se o do modelo vier vazio ou em lista, usa o tema."""
+    cover = (script.get("thumbnail") or "").strip()
+    if cover and cover.count(",") < 2:
+        return cover
+    problem = "veio vazia" if not cover else "veio como lista de palavras"
+
+    # O tema e uma frase do proprio modelo, em letra normal. Se precisar cortar,
+    # corta na ultima virgula dentro do limite (fim de oracao) e nunca deixa
+    # preposicao pendurada: "Naama, o comandante sirio, curado depois" era o
+    # corte cego, e virou "Naama, o comandante sirio".
+    all_words = script.get("topic", "").split()
+    words = all_words[:max_words]
+    if len(all_words) > max_words:
+        commas = [i for i, w in enumerate(words) if w.endswith(",")]
+        if commas and commas[-1] + 1 >= 3:
+            words = words[:commas[-1] + 1]
+    while words and words[-1].strip(".,;:!?").lower() in _COVER_STOPWORDS:
+        words.pop()
+    fallback = " ".join(words).strip(".,;:!? ")
+    print(f"  [capa] o texto do modelo {problem}; usando o tema: {fallback}")
+    return fallback
 
 
 def scene_word_count(script: dict) -> int:
