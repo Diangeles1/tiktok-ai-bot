@@ -214,6 +214,9 @@ def main() -> None:
             "arco": script.get("_arc"),
             "fase": phase_name,
             "tema": script.get("_seed_topic"),
+            # de onde o modelo disse ter tirado a historia: conferir a
+            # referencia e o jeito rapido de pegar distorcao antes do publico
+            "passagem": script.get("passagem"),
             "primeira_frase": scenes[0]["narration"],
             "duracao_segundos": round(total, 1),
             "hashtags": tags,
@@ -227,6 +230,7 @@ def main() -> None:
         print(f"[5/5] DRY_RUN=true, pulando publicacao. Video pronto em: {video_path}")
         print(f"  Gancho usado: {script.get('_hook')}")
         print(f"  Arco narrativo: {script.get('_arc')}")
+        print(f"  Passagem: {script.get('passagem')}")
         print(f"  Primeira frase: {scenes[0]['narration']}")
         print(f"  Hashtags ({len(tags)}): {tag_line}")
         print(f"  Titulo TikTok:  {tiktok_title}")
