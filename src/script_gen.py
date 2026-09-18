@@ -64,6 +64,10 @@ Regras da narracao:
   ("havia um homem chamado", "em uma terra distante", "muitos anos atras"):
   isso e o jeito mais rapido de perder o espectador.
 - Final que deixe a pessoa querendo o proximo video, sem parecer propaganda.
+- Antes de escrever, identifique de onde a historia vem: livro, capitulo e
+  versiculos da Biblia, ou a fonte da tradicao no caso de santo. Registre no
+  campo "passagem" e conte o que ESSA passagem diz. Nao misture detalhes de
+  outra historia parecida, e nao preencha lacuna do texto com cliche.
 - Nunca peca curtida, compartilhamento ou comentario ("comente amem", "curta
   se voce cre", "compartilhe com quem precisa"). E isca de engajamento: as
   plataformas cortam o alcance de quem usa, e o publico cristao reconhece.
@@ -104,6 +108,7 @@ Regras da capa (campo "thumbnail"):
 Responda APENAS com um JSON valido no formato:
 {{
   "topic": "assunto especifico do video de hoje",
+  "passagem": "livro, capitulo e versiculos da historia contada, ou a fonte da tradicao",
   "caption": "legenda curta e chamativa (max 150 caracteres)",
   "thumbnail": "frase de capa com 3 a 6 palavras, em letra normal",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4"],
