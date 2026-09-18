@@ -11,6 +11,35 @@ BLACK = (0, 0, 0, 255)
 HIGHLIGHT = (255, 214, 10, 255)
 
 
+# O edge-tts devolve a palavra nua: "dias." volta como "dias" e "Depois," como
+# "Depois". A legenda montada so com esses timings sai sem pontuacao nenhuma, o
+# que atrapalha a leitura e junta frases visualmente. A pontuacao e recuperada
+# casando as palavras com o texto original da cena, que a tem.
+_PUNCT = ".,;:!?()[]{}\"'"
+
+
+def _core(token: str) -> str:
+    return token.strip(_PUNCT).lower()
+
+
+def attach_punctuation(narration: str, word_timings: list[dict]) -> list[dict]:
+    """Devolve os timings com a pontuacao do texto original colada em cada palavra.
+
+    Percorre as duas listas em paralelo. Quando a palavra do timing e o token do
+    texto batem, o token (com pontuacao) substitui a palavra nua. Se nao baterem,
+    o timing e mantido como veio: e melhor uma legenda sem virgula do que uma
+    legenda deslocada em relacao a fala."""
+    tokens = narration.split()
+    ti = 0
+    for token in tokens:
+        if ti >= len(word_timings):
+            break
+        if _core(token) == _core(word_timings[ti]["text"]):
+            word_timings[ti]["text"] = token.strip()
+            ti += 1
+    return word_timings
+
+
 def build_chunks(word_timings: list[dict], words_per_chunk: int = 3) -> list[dict]:
     """Agrupa palavras em blocos pequenos (ex: 3 em 3), guardando tambem as
     palavras do bloco para poder destacar a que esta sendo falada."""

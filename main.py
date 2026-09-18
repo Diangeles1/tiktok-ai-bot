@@ -30,8 +30,22 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _phase(cfg: dict) -> tuple[str, dict]:
+    """Devolve o nome da fase ativa e os parametros dela.
+
+    Sem bloco "fases" no config, cai nos valores de monetizacao, que eram o
+    comportamento de antes: melhor errar para o video longo do que publicar
+    video curto sem querer numa conta que ja monetiza."""
+    name = cfg.get("fase", "monetizacao")
+    fallback = {"min_narration_words": script_gen.MIN_NARRATION_WORDS,
+                "max_narration_words": 220, "min_scenes": script_gen.MIN_SCENES,
+                "max_scenes": script_gen.MAX_SCENES, "min_duration_seconds": 60}
+    return name, {**fallback, **cfg.get("fases", {}).get(name, {})}
+
+
 def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple[dict, list[dict]]:
     script_cfg = cfg.get("script", {})
+    phase_name, phase = _phase(cfg)
     hours = cfg.get("posting_hours_utc", [])
     slot = script_gen.current_slot(hours)
     slot_count = max(1, len(hours))
@@ -41,20 +55,32 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
     hook = script_gen.hook_of_the_slot(
         script_cfg.get("hooks", []), slot_index=slot, slot_count=slot_count,
     )
+    # o arco define a ESTRUTURA da historia, o gancho define so a primeira
+    # frase. Girar os dois em listas de tamanhos coprimos faz o mesmo tema
+    # voltar meses depois contado de outro jeito.
+    arc = script_gen.rotate_by_slot(
+        script_cfg.get("arcs", []), slot_index=slot, slot_count=slot_count,
+    )
     print(f"[1/4] Gerando roteiro em cenas (publicacao {slot + 1} de {slot_count}, "
-          f"tema: {seed_topic or 'livre'}, gancho: {hook['name'] if hook else 'livre'})")
+          f"tema: {seed_topic or 'livre'}, gancho: {hook['name'] if hook else 'livre'}, "
+          f"arco: {arc['name'] if arc else 'livre'}, fase: {phase_name})")
     script = script_gen.generate_scene_script(
         niche=cfg["niche"],
         language=cfg["language"],
         seed_topic=seed_topic,
         model=script_cfg.get("model", script_gen.MODEL),
-        min_words=script_cfg.get("min_narration_words", script_gen.MIN_NARRATION_WORDS),
-        max_words=script_cfg.get("max_narration_words", 220),
+        min_words=phase["min_narration_words"],
+        max_words=phase["max_narration_words"],
         extra_rules=script_cfg.get("extra_rules"),
         hook=hook,
+        arc=arc,
+        min_scenes=phase["min_scenes"],
+        max_scenes=phase["max_scenes"],
+        cta=phase.get("cta"),
     )
     # guardados para o metadata.json, que e montado la no main()
     script["_hook"] = hook["name"] if hook else None
+    script["_arc"] = arc["name"] if arc else None
     script["_seed_topic"] = seed_topic
     scenes = script["scenes"]
     print(f"  Tema de hoje: {script['topic']} "
@@ -82,7 +108,7 @@ def _build_character_mode(cfg: dict, run_dir: str, width: int, height: int) -> t
         niche=cfg["niche"],
         language=cfg["language"],
         model=script_cfg.get("model", script_gen.MODEL),
-        min_words=script_cfg.get("min_narration_words", script_gen.MIN_NARRATION_WORDS),
+        min_words=_phase(cfg)[1]["min_narration_words"],
     )
     print(f"  Tema de hoje: {script['topic']} ({len(script['narration'].split())} palavras)")
 
@@ -113,19 +139,28 @@ def main() -> None:
 
     print("[3/4] Gerando a narracao (com timing de cada palavra)")
     total = scenes_mod.render_narration(
-        scenes, cfg["tts_voice"], os.path.join(run_dir, "narration"), gap=scene_gap,
+        scenes, cfg["tts_voice"], os.path.join(run_dir, "narration"),
+        rate=cfg.get("tts_rate"), gap=scene_gap,
     )
     # a contagem de palavras do roteiro e so uma estimativa; a duracao do audio
     # e o numero que decide se o video se qualifica para a monetizacao
     print(f"  Narracao de {total:.1f}s")
-    if total < 60:
-        print("  AVISO: abaixo de 1 minuto, nao qualifica para o TikTok Creator Rewards. "
-              "Aumente script.min_narration_words no config.yaml.")
+    phase_name, phase = _phase(cfg)
+    min_duration = phase.get("min_duration_seconds", 0)
+    if min_duration and total < min_duration:
+        print(f"  AVISO: abaixo de {min_duration}s, nao qualifica para o TikTok Creator "
+              f"Rewards. Aumente fases.{phase_name}.min_narration_words no config.yaml.")
 
     print("[4/5] Montando o video final")
     video_path = os.path.join(run_dir, "final.mp4")
     sfx_cfg = cfg.get("sfx", {})
     captions_cfg = cfg.get("captions", {})
+    brand = cfg.get("branding", {})
+    # a marca fica gravada no video: descobrir o placeholder depois de publicado
+    # significa republicar tudo, entao o aviso sai antes do render
+    if brand.get("watermark_enabled", True) and brand.get("handle") in (None, "", "@canal"):
+        print("  AVISO: branding.handle ainda e o placeholder. Troque pelo @ real "
+              "do canal no config.yaml antes de publicar.")
     video.build_video(
         scenes, width, height, cfg["video"]["fps"], video_path,
         words_per_chunk=captions_cfg.get("words_per_chunk", 3),
@@ -137,6 +172,10 @@ def main() -> None:
         music_path=sfx.pick_random_music() if sfx_cfg.get("music_enabled", True) else None,
         music_volume=sfx_cfg.get("music_volume", 0.10),
         crossfade=cfg["video"].get("crossfade_seconds", 0.4),
+        color_boost=cfg["video"].get("color_boost", 1.0),
+        watermark=(brand.get("handle") if brand.get("watermark_enabled", True) else None),
+        watermark_opacity=brand.get("watermark_opacity", 0.35),
+        watermark_repeats=brand.get("watermark_repeats", 4),
     )
 
     thumb_cfg = cfg.get("thumbnail", {})
@@ -172,17 +211,22 @@ def main() -> None:
             "data": today,
             "publicacao": slot_suffix,
             "gancho": script.get("_hook"),
+            "arco": script.get("_arc"),
+            "fase": phase_name,
             "tema": script.get("_seed_topic"),
             "primeira_frase": scenes[0]["narration"],
             "duracao_segundos": round(total, 1),
             "hashtags": tags,
             "titulo_youtube": youtube_title,
+            # no modo upload a legenda nao vai pela API: fica aqui para copiar
+            "legenda_tiktok": tiktok_title,
         }, f, ensure_ascii=False, indent=2)
 
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
     if dry_run:
         print(f"[5/5] DRY_RUN=true, pulando publicacao. Video pronto em: {video_path}")
         print(f"  Gancho usado: {script.get('_hook')}")
+        print(f"  Arco narrativo: {script.get('_arc')}")
         print(f"  Primeira frase: {scenes[0]['narration']}")
         print(f"  Hashtags ({len(tags)}): {tag_line}")
         print(f"  Titulo TikTok:  {tiktok_title}")
@@ -232,9 +276,15 @@ def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict) -> None:
         title=title,
         privacy_level=tiktok_cfg.get("privacy_level", "SELF_ONLY"),
         on_token_refreshed=_save_tiktok_refresh_token,
+        mode=tiktok_cfg.get("mode", "direct"),
     )
-    print(f"  [tiktok] publicado (publish_id={result['publish_id']}, "
-          f"status={result['status'].get('status')})")
+    if tiktok_cfg.get("mode", "direct") == "upload":
+        print(f"  [tiktok] enviado para a caixa de entrada do app (publish_id={result['publish_id']}). "
+              f"Abra o TikTok no celular e finalize a postagem. Legenda sugerida:")
+        print(f"  {title}")
+    else:
+        print(f"  [tiktok] publicado (publish_id={result['publish_id']}, "
+              f"status={result['status'].get('status')})")
 
 
 def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict,

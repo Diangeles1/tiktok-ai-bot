@@ -40,6 +40,10 @@ jobs:
 
       - name: Rodar pipeline
         env:
+          # sem isso o Python bufferiza a saida (o passo do Actions e um pipe,
+          # nao um terminal) e o log so aparece no fim. Se a execucao estourar
+          # o timeout, ela e morta e o log vai junto, justo quando ele importa.
+          PYTHONUNBUFFERED: "1"
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}

@@ -9,6 +9,7 @@ import os
 from moviepy.editor import AudioFileClip
 
 from src import tts
+from src.captions import attach_punctuation
 from src.images import generate_scene_image
 
 
@@ -31,7 +32,7 @@ def render_images(scenes: list[dict], style: str, width: int, height: int,
         )
 
 
-def render_narration(scenes: list[dict], voice: str, out_dir: str,
+def render_narration(scenes: list[dict], voice: str, out_dir: str, rate: str | None = None,
                       gap: float = 0.25) -> float:
     """Sintetiza a narracao de cada cena e preenche scene["audio"], ["start"],
     ["duration"] e ["timings"] (tempos absolutos). Retorna a duracao total."""
@@ -41,7 +42,12 @@ def render_narration(scenes: list[dict], voice: str, out_dir: str,
     for i, scene in enumerate(scenes):
         audio_path, timings = tts.synthesize_with_timings(
             scene["narration"], voice, os.path.join(out_dir, f"scene_{i:02d}.mp3"),
+            rate=rate,
         )
+        # o edge-tts devolve a palavra sem pontuacao; recuperada aqui, na
+        # origem, para todo mundo que consome o timing ja receber certo
+        timings = attach_punctuation(scene["narration"], timings)
+
         with AudioFileClip(audio_path) as clip:
             duration = clip.duration
 
