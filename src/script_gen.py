@@ -4,6 +4,7 @@ import json
 import math
 import os
 import random
+import re
 
 from groq import BadRequestError, Groq
 
@@ -63,6 +64,9 @@ Regras da narracao:
   ("havia um homem chamado", "em uma terra distante", "muitos anos atras"):
   isso e o jeito mais rapido de perder o espectador.
 - Final que deixe a pessoa querendo o proximo video, sem parecer propaganda.
+- Nunca peca curtida, compartilhamento ou comentario ("comente amem", "curta
+  se voce cre", "compartilhe com quem precisa"). E isca de engajamento: as
+  plataformas cortam o alcance de quem usa, e o publico cristao reconhece.
 - Fala natural e corrida, sem emoji, sem markdown e sem citar numero de cena.
 - Nada ofensivo, discriminatorio, sexual ou perigoso.
 
@@ -75,9 +79,16 @@ Regras das cenas:
   celular, jornal): o gerador nao desenha texto legivel e a cena sai borrada.
   Mostre a mesma ideia por outro caminho, por exemplo uma porta fechada em vez de
   uma placa de "fechado".
-- Prefira plano aberto ou medio, mostrando lugar e objeto. Evite close de parte
-  do corpo (maos, olhos, rosto): nesse gerador o close costuma virar um rosto
-  aleatorio que nao tem nada a ver com a cena.
+- PROIBIDO enquadramento fechado. O campo "visual" NUNCA pode comecar com nem
+  conter "close-up", "closeup", "extreme close", "macro shot" ou "detail shot",
+  e NUNCA pode ter parte do corpo como assunto (hands, feet, foot, eyes, face,
+  fingers, arms, legs, skin, lips, mouth). Nesse gerador o enquadramento fechado
+  devolve um rosto aleatorio sem nenhuma relacao com a cena, e o video quebra.
+  Todo "visual" comeca por "wide shot", "medium shot" ou "aerial view".
+  Para mostrar uma acao, mostre o OBJETO ou o AMBIENTE, nao o membro: em vez de
+  "close-up of hands pouring water", escreva "wide shot of a clay jar pouring
+  water onto stone"; em vez de "close-up of weary feet in the sand", escreva
+  "wide shot of footprints crossing a dune at dusk".
 - A imagem da PRIMEIRA cena tem que ser a mais impactante de todas. Ela aparece
   junto com a primeira frase e segura o espectador tanto quanto o texto.
 - Sem rosto de pessoa real ou celebridade, sem logo nem marca registrada.
@@ -159,15 +170,21 @@ def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
 def _request_scene_script(client: Groq, model: str, niche: str, language: str,
                            min_words: int, max_words: int, seed_topic: str | None,
                            extra_rules: str | None = None,
-                           hook: dict | None = None) -> dict:
+                           hook: dict | None = None, arc: dict | None = None,
+                           min_scenes: int = MIN_SCENES, max_scenes: int = MAX_SCENES,
+                           cta: str | None = None) -> dict:
     prompt = SCENE_PROMPT_TEMPLATE.format(
         niche=niche, language=language, min_words=min_words, max_words=max_words,
-        min_scenes=MIN_SCENES, max_scenes=MAX_SCENES,
+        min_scenes=min_scenes, max_scenes=max_scenes,
     )
     if extra_rules:
         prompt += f"\nRegras adicionais deste canal:\n{extra_rules}\n"
     if hook:
-        prompt += (f"\nFormato obrigatorio da primeira frase: {hook['instruction']}\n")
+        prompt += (f"\nFormato obrigatorio da primeira frase (fiel a passagem: sem inventar fato nem exagerar detalhe para chamar atencao): {hook['instruction']}\n")
+    if arc:
+        prompt += (f"\nEstrutura obrigatoria da historia: {arc['instruction']}\n")
+    if cta:
+        prompt += (f"\nChamada para acao: {cta}\n")
     if seed_topic:
         prompt += f"\nTema de hoje (mantenha este tema): {seed_topic}\n"
     else:
@@ -182,7 +199,39 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
         if not scene.get("narration") or not scene.get("visual"):
             raise ValueError(f"Cena incompleta na resposta do LLM: {scene}")
 
+    enforce_wide_framing(scenes)
     return data
+
+
+# Enquadramento fechado quebra o gerador: pedir close de parte do corpo devolve
+# um rosto aleatorio sem relacao com a cena. A regra existe no prompt, mas o
+# modelo desobedeceu em 3 de 4 execucoes reais, entao a trava e no codigo.
+_CLOSEUP_RE = re.compile(
+    r"\b(?:extreme\s+|tight\s+)?(?:close[\s-]?ups?|macro\s+shots?|detail\s+shots?)\b",
+    re.IGNORECASE)
+_BODY_RE = re.compile(
+    r"\b(?:hands?|feet|foot|eyes?|faces?|fingers?|arms?|legs?|skin|lips?|mouth|"
+    r"palms?|shoulders?|forearms?)\b", re.IGNORECASE)
+
+
+def enforce_wide_framing(scenes: list[dict]) -> int:
+    """Troca enquadramento fechado por plano aberto. Devolve quantas cenas mudou.
+
+    Reescrever e melhor que gerar o roteiro de novo: a narracao ja esta boa e o
+    problema e so a descricao da imagem, entao corrigir sai de graca em vez de
+    queimar mais uma chamada de LLM."""
+    fixed = 0
+    for i, scene in enumerate(scenes):
+        visual = scene.get("visual", "")
+        new = _CLOSEUP_RE.sub("wide shot", visual)
+        if new != visual:
+            print(f"  [script] cena {i + 1}: enquadramento fechado trocado por plano aberto.")
+            scene["visual"] = new
+            fixed += 1
+        if _BODY_RE.search(scene["visual"]):
+            print(f"  [script] AVISO: cena {i + 1} ainda cita parte do corpo "
+                  f"({_BODY_RE.search(scene['visual']).group(0)}); o gerador pode errar.")
+    return fixed
 
 
 def scene_word_count(script: dict) -> int:
@@ -218,6 +267,19 @@ def _spread_stride(total: int) -> int:
     return 1
 
 
+def rotate_by_slot(items: list[dict], today: datetime.date | None = None,
+                    slot_index: int = 0, slot_count: int = 1) -> dict | None:
+    """Escolhe um item da lista girando por dia e por publicacao.
+
+    Usada para ganchos e para arcos narrativos. Como as duas listas tem
+    tamanhos diferentes (5 e 6, que sao coprimos), a combinacao gancho+arco so
+    se repete depois de 30 publicacoes, em vez de travar sempre no mesmo par."""
+    if not items:
+        return None
+    day = (today or datetime.date.today()).toordinal()
+    return items[(day * max(1, slot_count) + slot_index) % len(items)]
+
+
 def hook_of_the_slot(hooks: list[dict], today: datetime.date | None = None,
                       slot_index: int = 0, slot_count: int = 1) -> dict | None:
     """Escolhe o estilo de abertura da vez, girando pela lista.
@@ -251,7 +313,9 @@ def topic_of_the_day(topics: list[str], today: datetime.date | None = None,
 def generate_scene_script(niche: str, language: str, seed_topic: str | None = None,
                            model: str = MODEL, min_words: int = MIN_NARRATION_WORDS,
                            max_words: int = 220, extra_rules: str | None = None,
-                           hook: dict | None = None) -> dict:
+                           hook: dict | None = None, arc: dict | None = None,
+                           min_scenes: int = MIN_SCENES, max_scenes: int = MAX_SCENES,
+                           cta: str | None = None) -> dict:
     """Gera o roteiro do dia dividido em cenas, para o formato narrado sobre
     imagens que mudam. Mesma politica de retentativa do formato de personagem:
     narracao curta demais nao passa de 1 minuto e perde a monetizacao."""
@@ -260,7 +324,8 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
     best = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         data = _request_scene_script(client, model, niche, language, min_words,
-                                      max_words, seed_topic, extra_rules, hook)
+                                      max_words, seed_topic, extra_rules, hook, arc,
+                                      min_scenes, max_scenes, cta)
         word_count = scene_word_count(data)
         if word_count >= min_words:
             return data

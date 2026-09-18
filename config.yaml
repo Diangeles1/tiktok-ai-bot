@@ -9,6 +9,19 @@ language: "pt-BR"
 # naturalidade bruta das vozes multilingues, que puxam sotaque americano.
 # Rode `edge-tts --list-voices` para ver as outras opcoes.
 tts_voice: "pt-BR-AntonioNeural"
+# Velocidade da narracao. A leitura padrao do edge-tts fica arrastada para
+# formato curto: uma aceleracao leve melhora a retencao sem atropelar a fala.
+# Acima de +12% a narracao reverente comeca a soar apressada.
+tts_rate: "+8%"
+
+branding:
+  # Aparece como marca d'agua no video, repetida ao longo do tempo. Serve para
+  # duas coisas: identidade de canal e dificultar que outro perfil baixe o video
+  # e reposte, porque tapar a marca em varios pontos da mais trabalho que vale.
+  handle: "@canal"
+  watermark_enabled: true
+  watermark_opacity: 0.35
+  watermark_repeats: 4     # quantas vezes a marca aparece ao longo do video
 
 # Personagem original fixo do canal. A imagem e gerada UMA vez
 # (python -m src.generate_character) e reaproveitada em todo video, pra manter
@@ -53,15 +66,51 @@ video:
   fps: 30
   zoom_effect: true         # movimento de camera (zoom + pan com easing), variando a direcao por cena
   crossfade_seconds: 0.6    # duracao da transicao entre cenas
+  # Leve realce de cor no video inteiro. A imagem do gerador sai um pouco
+  # lavada, e a correcao faz diferenca visivel no feed. 1.0 desliga.
+  color_boost: 1.12
+
+# Fase do canal. Estrategia de crescimento em duas etapas:
+#  - "crescimento": a conta ainda nao e monetizada, entao nao ha motivo para
+#    passar de 1 minuto (so video acima de 1 minuto rende no Creator Rewards, e
+#    so conta monetizada recebe). Video curto e mais barato de assistir ate o
+#    fim, retencao alta empurra o alcance, e alcance vira seguidor.
+#  - "monetizacao": a conta ja bateu os requisitos, e todo video precisa passar
+#    de 1 minuto para contar.
+# Troque para "monetizacao" quando a conta for aceita no programa.
+fase: "crescimento"
+
+fases:
+  crescimento:
+    # Medido na execucao real com tts_rate +8%: 171 palavras deram 65,4s
+    # contando as pausas entre cenas, ou seja 2,6 palavras por segundo.
+    # 90 a 115 palavras dao de 35 a 44 segundos.
+    min_narration_words: 90
+    max_narration_words: 115
+    min_scenes: 5
+    max_scenes: 8
+    min_duration_seconds: 0       # nao ha minimo nesta fase
+    cta: >
+      A ULTIMA cena fecha pedindo, em uma frase, que a pessoa siga o canal para
+      ouvir a proxima historia. Nesta fase o video existe para trazer
+      seguidor, entao o pedido e direto, mas no tom reverente da narracao.
+  monetizacao:
+    # Calibrado com medicao real: a voz Antonio le 2,42 palavras por segundo no
+    # ritmo padrao, o que dava 64s com 155 palavras. Com tts_rate em +8% a
+    # leitura ficou 8,3% mais rapida (medido: a mesma frase caiu de 7,30s para
+    # 6,74s), entao 155 palavras passariam a dar 59s. O minimo sobe junto.
+    min_narration_words: 168
+    max_narration_words: 220
+    min_scenes: 8
+    max_scenes: 14
+    min_duration_seconds: 60      # abaixo disso nao rende no Creator Rewards
+    cta: >
+      A ULTIMA cena fecha com um convite curto para acompanhar o canal, no
+      maximo uma frase, nascido do assunto da historia. Convide a voltar para a
+      proxima historia.
 
 script:
   model: "openai/gpt-oss-120b"   # modelo da Groq usado para escrever o roteiro
-  # Abaixo disso o roteiro e gerado de novo, porque o video precisa passar de
-  # 1 minuto para a monetizacao. Calibrado com medicao real: a voz Antonio le
-  # 2,42 palavras por segundo, entao 155 palavras dao cerca de 64s, com folga.
-  # Exigir 170 pedia 70s e queimava tentativas de LLM sem necessidade.
-  min_narration_words: 155
-  max_narration_words: 220
 
   # Regras extras coladas no prompt do roteiro. Aqui ficam as travas que este
   # nicho exige e que nao valeriam para outro tipo de canal.
@@ -74,9 +123,11 @@ script:
       nem doutrina. Em historia de santo, fique no que a tradicao registra.
     - Tom respeitoso e acolhedor. Nunca ataque, compare ou diminua outra religiao,
       denominacao ou crenca.
-    - Nas descricoes visuais, prefira ambiente, objeto, paisagem, maos, luz e
-      silhueta a distancia. Evite rosto em close de figura sagrada: o gerador de
-      imagens erra rosto com frequencia e o resultado fica irreverente.
+    - Nas descricoes visuais, prefira ambiente, objeto, paisagem, luz e silhueta
+      vista de longe. Nunca peca rosto de figura sagrada: o gerador erra rosto
+      com frequencia e o resultado fica irreverente. Nao cite parte do corpo
+      como assunto da imagem, nem mesmo maos: mostre a acao pelo objeto ou pelo
+      ambiente (a jarra derramando, e nao as maos derramando).
 
   # Estilos de abertura, girando um por publicacao. A primeira frase e o que
   # decide a retencao, e girar entre formatos serve para MEDIR: com um estilo
@@ -92,10 +143,6 @@ script:
       instruction: >
         Comece no instante de maior tensao da historia, sem nenhuma apresentacao.
         O contexto aparece so depois, na segunda ou terceira cena.
-    - name: "contraintuitivo"
-      instruction: >
-        Abra com uma afirmacao que soe improvavel ou contraditoria, e que a
-        historia so explica no final.
     - name: "detalhe-estranho"
       instruction: >
         Abra citando um detalhe concreto e curioso da historia, algo especifico
@@ -104,6 +151,66 @@ script:
       instruction: >
         Abra revelando o resultado final da historia e depois volte para contar
         como se chegou ate ali.
+
+  # Fora da rotacao: o codigo so le "hooks". Em 16 geracoes de teste, com tres
+  # versoes diferentes da instrucao, este gancho distorceu a passagem com
+  # frequencia (milagre inventado, fome negada, acao trocada, expectativa
+  # fabricada). Ele pede surpresa e o modelo entrega surpresa as custas da
+  # fidelidade. Para reativar, mova de volta para "hooks" e teste de novo,
+  # de preferencia com outro modelo.
+  ganchos_desativados:
+    - name: "contraintuitivo"
+      # Historico: pedir uma afirmacao que "soasse improvavel" fez o modelo
+      # distorcer a passagem em 7 de 10 testes (milagre inventado, fome negada,
+      # acao trocada). A surpresa agora vem de uma quebra de expectativa que o
+      # proprio texto registra, entao os dois lados sao fatos da passagem.
+      instruction: >
+        Abra com uma quebra de expectativa que a propria passagem registra: o
+        que alguem da historia esperava, ou o que parecia obvio, contra o que de
+        fato aconteceu. Os DOIS lados precisam estar no texto biblico ou na
+        tradicao. Exemplo do tipo certo, sobre Davi: "Saul vestiu Davi com a
+        propria armadura para a luta, e Davi tirou tudo antes de sair." Nao
+        invente fato, nao exagere detalhe (tempo, quantidade, o que alguem
+        comeu, bebeu ou sofreu), nao negue o que o texto afirma e nao troque o
+        que a pessoa fez.
+
+  # Padroes narrativos, girando um por publicacao, independente do tema.
+  # A ideia vem de canais que catalogam video por ESTRUTURA e nao por assunto:
+  # o que se repete e da audiencia e o formato da historia, nao o personagem.
+  # Combinando arco x tema x gancho, o mesmo tema volta meses depois contado de
+  # outro jeito, e o nome do arco vai no metadata.json para depois comparar
+  # retencao e manter so os que seguram o espectador.
+  arcs:
+    - name: "queda-e-resgate"
+      instruction: >
+        Estruture como queda e resgate: mostre primeiro o fundo do poco, o mais
+        baixo que a pessoa chegou, e so depois o socorro que veio.
+    - name: "duvida-e-prova"
+      instruction: >
+        Estruture em torno de uma duvida: alguem nao acredita, resiste ou
+        questiona, e a historia caminha ate o momento em que ele nao consegue
+        mais negar o que viu.
+    - name: "obediencia-custosa"
+      instruction: >
+        Estruture como uma ordem dificil: alguem recebe uma instrucao que parece
+        absurda ou humilhante, paga um preco para obedecer, e so entao entende.
+    - name: "ultimo-vira-primeiro"
+      instruction: >
+        Estruture como inversao: quem era ignorado, desprezado ou considerado o
+        menos provavel e exatamente quem e escolhido no final.
+    - name: "perda-e-restauracao"
+      instruction: >
+        Estruture como perda seguida de restauracao: mostre o que foi tirado, o
+        tempo de vazio, e o que voltou diferente do que era antes.
+    - name: "encontro-que-muda-tudo"
+      instruction: >
+        Estruture em torno de um unico encontro: a pessoa antes, o encontro, e a
+        pessoa depois. O contraste entre o antes e o depois e o coracao do video.
+    - name: "promessa-que-demora"
+      instruction: >
+        Estruture em torno da espera: a promessa vem cedo e demora anos para se
+        cumprir. Mostre o peso do tempo passando e a duvida no meio do caminho,
+        antes do cumprimento.
 
   # Um tema por publicacao, girando pela lista. Sem isso o modelo repetiria
   # sempre as historias mais famosas, e as tres execucoes do mesmo dia sairiam
@@ -192,7 +299,7 @@ script:
     - "Salomao julgando a disputa entre duas maes"
     - "Elias desafiando os profetas de Baal no Carmelo"
     - "Elias alimentado pelos corvos no deserto"
-    - "Naama curado depois de sete banhos no Jordao"
+    - "Naamã, o comandante sírio, curado depois de sete banhos no Jordão"
     - "Jonas engolido pelo grande peixe"
     - "Os tres jovens na fornalha ardente"
     - "Daniel na cova dos leoes"
@@ -242,6 +349,14 @@ sfx:
 tiktok:
   enabled: true
   privacy_level: "SELF_ONLY"  # apps nao auditados so podem postar como SELF_ONLY (rascunho privado)
+  # "upload": o video cai na caixa de entrada do app e VOCE finaliza a postagem
+  #   no celular, escolhendo legenda, som e privacidade. Como quem publica e
+  #   voce, sai publico mesmo com o app ainda nao auditado. Exige o escopo
+  #   video.upload. Limite: 5 envios pendentes em 24h, entao finalize os
+  #   rascunhos todo dia, senao a partir do segundo dia o envio falha.
+  # "direct": o bot publica sozinho, mas app nao auditado so posta privado
+  #   (SELF_ONLY). Use depois que a auditoria sair. Exige video.publish.
+  mode: "upload"
 
 youtube:
   enabled: true

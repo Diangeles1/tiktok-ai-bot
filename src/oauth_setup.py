@@ -16,7 +16,10 @@ import requests
 
 AUTHORIZE_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
-SCOPES = "user.info.basic,video.publish"
+# video.upload serve o modo "upload" (caixa de entrada) e video.publish o modo
+# "direct". Os dois precisam estar habilitados no app do TikTok Developer
+# Portal; se so um estiver, defina TIKTOK_SCOPES com a lista que o app tem.
+SCOPES = os.environ.get("TIKTOK_SCOPES", "user.info.basic,video.upload,video.publish")
 
 
 def main() -> None:

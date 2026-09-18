@@ -9,9 +9,10 @@ import numpy as np
 from moviepy.audio.fx.all import audio_fadeout, audio_loop
 from moviepy.editor import (AudioFileClip, CompositeAudioClip, CompositeVideoClip,
                              ImageClip, VideoClip)
-from PIL import Image
+from PIL import Image, ImageDraw, ImageEnhance
 
 from src.captions import build_chunks, render_chunk
+from src.images import load_font
 
 
 def _ease(progress: float) -> float:
@@ -31,7 +32,35 @@ CAMERA_MOVES = [
 ]
 
 
-def _camera_move(image_path: str, duration: float, width: int, height: int, move: tuple):
+def _load_boosted(image_path: str, color_boost: float = 1.0) -> Image.Image:
+    """Abre a imagem ja com o realce de cor aplicado.
+
+    O gerador devolve imagem um pouco lavada e a correcao faz diferenca visivel
+    no feed. Feito uma vez por cena, na abertura, e nao dentro do make_frame:
+    aplicar por quadro multiplicaria o custo por 30 sem mudar o resultado."""
+    source = Image.open(image_path).convert("RGB")
+    if color_boost and abs(color_boost - 1.0) > 1e-3:
+        source = ImageEnhance.Color(source).enhance(color_boost)
+    return source
+
+
+def _render_watermark(handle: str, width: int, out_path: str) -> tuple[str, int, int]:
+    """Desenha o @ do canal em PNG transparente, com contorno para continuar
+    legivel tanto sobre cena clara quanto escura."""
+    font = load_font(max(18, int(width / 26)))
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    box = probe.textbbox((0, 0), handle, font=font, stroke_width=3)
+    w, h = box[2] - box[0], box[3] - box[1]
+    img = Image.new("RGBA", (w + 12, h + 12), (0, 0, 0, 0))
+    ImageDraw.Draw(img).text((6 - box[0], 6 - box[1]), handle, font=font,
+                              fill=(255, 255, 255, 255),
+                              stroke_width=3, stroke_fill=(0, 0, 0, 255))
+    img.save(out_path)
+    return out_path, img.width, img.height
+
+
+def _camera_move(image_path: str, duration: float, width: int, height: int, move: tuple,
+                  color_boost: float = 1.0):
     """Ken Burns com easing: zoom e pan simultaneos sobre a imagem parada.
 
     Cada quadro e um recorte da imagem original redimensionado direto para o
@@ -39,7 +68,7 @@ def _camera_move(image_path: str, duration: float, width: int, height: int, move
     obvio, mas ai qualquer erro de arredondamento no offset expoe faixa preta na
     beirada; recortando, o quadro sai sempre exato."""
     zoom_from, zoom_to, pan_from, pan_to = move
-    source = Image.open(image_path).convert("RGB")
+    source = _load_boosted(image_path, color_boost)
     src_w, src_h = source.size
 
     # maior janela com o aspecto do video que cabe na imagem, no zoom 1
@@ -100,7 +129,9 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
                  laugh_path: str | None = None, laugh_gap: float = 0.4,
                  caption_bottom_margin: int = 420,
                  music_path: str | None = None, music_volume: float = 0.10,
-                 crossfade: float = 0.6) -> str:
+                 crossfade: float = 0.6, color_boost: float = 1.0,
+                 watermark: str | None = None, watermark_opacity: float = 0.35,
+                 watermark_repeats: int = 4) -> str:
     """Cada cena precisa de "image", "audio", "start", "duration" e "timings"
     (tempos absolutos), como monta src.scenes."""
     narration_end = scenes[-1]["start"] + scenes[-1]["duration"]
@@ -119,9 +150,10 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
 
         if zoom_effect:
             clip = _camera_move(scene["image"], visual_duration, width, height,
-                                 CAMERA_MOVES[i % len(CAMERA_MOVES)])
+                                 CAMERA_MOVES[i % len(CAMERA_MOVES)], color_boost)
         else:
-            clip = (ImageClip(scene["image"]).set_duration(visual_duration)
+            frame = np.asarray(_load_boosted(scene["image"], color_boost))
+            clip = (ImageClip(frame).set_duration(visual_duration)
                     .resize(height=height).set_position("center"))
 
         clip = clip.set_start(scene["start"])
@@ -131,11 +163,16 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
 
     caption_clips = []
     os.makedirs(tmp_dir, exist_ok=True)
-    timings = [t for scene in scenes for t in scene["timings"]]
-    for i, chunk in enumerate(build_chunks(timings, words_per_chunk)):
+    # Os blocos sao montados POR CENA. Achatar os timings de todas as cenas numa
+    # lista so fazia um bloco de 3 palavras juntar o fim de uma cena com o inicio
+    # da seguinte, atravessando o corte e a pausa entre elas: a legenda ficava
+    # falando de uma cena por cima da imagem da outra.
+    chunks = [(si, c) for si, scene in enumerate(scenes)
+              for c in build_chunks(scene["timings"], words_per_chunk)]
+    for i, (si, chunk) in enumerate(chunks):
         words = chunk["words"]
         paths, png_height = render_chunk([w["text"] for w in words], width,
-                                          f"{tmp_dir}/cap_{i:03d}")
+                                          f"{tmp_dir}/cap_{si:02d}_{i:03d}")
         center_y = height - caption_bottom_margin - png_height / 2
 
         for j, path in enumerate(paths):
@@ -150,10 +187,34 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
                 clip = clip.set_position((0, center_y - png_height / 2))
             caption_clips.append(clip)
 
+    # A marca d'agua aparece em varios pontos e troca de lugar. Repetir dificulta
+    # que outro perfil baixe o video e corte a marca para repostar: tapar um
+    # canto e facil, tapar quatro em posicoes diferentes estraga o video.
+    watermark_clips = []
+    if watermark and watermark_repeats > 0:
+        wm_path, wm_w, wm_h = _render_watermark(watermark, width, f"{tmp_dir}/watermark.png")
+        segment = total / watermark_repeats
+        margin = width * 0.06
+        for k in range(watermark_repeats):
+            start = k * segment + segment * 0.15
+            duration = min(4.0, segment * 0.55)
+            if start + duration > total:
+                break
+            x = margin if k % 2 == 0 else width - wm_w - margin
+            # mantida na metade de cima: embaixo ficaria por tras da legenda e
+            # dentro da area que a interface do TikTok cobre
+            y = height * (0.15 + 0.10 * (k % 3))
+            watermark_clips.append(
+                ImageClip(wm_path).set_start(start).set_duration(duration)
+                .set_opacity(watermark_opacity).set_position((x, y))
+                .crossfadein(0.4).crossfadeout(0.4)
+            )
+
     audio, audio_tracks = _build_audio(scenes, narration_end, total,
                                         laugh_path, laugh_gap, music_path, music_volume)
 
-    final = CompositeVideoClip(scene_clips + caption_clips, size=(width, height))
+    final = CompositeVideoClip(scene_clips + caption_clips + watermark_clips,
+                                size=(width, height))
     final = final.set_audio(audio).set_duration(total)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -168,7 +229,7 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
     )
 
     final.close()
-    for clip in scene_clips + caption_clips + audio_tracks:
+    for clip in scene_clips + caption_clips + watermark_clips + audio_tracks:
         clip.close()
 
     return out_path
