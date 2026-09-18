@@ -5,13 +5,18 @@ import math
 import os
 import random
 import re
+import time
 
-from groq import BadRequestError, Groq
+from groq import BadRequestError, Groq, RateLimitError
 
 MODEL = "openai/gpt-oss-120b"
 MIN_NARRATION_WORDS = 170
 MAX_ATTEMPTS = 3      # tentativas por narracao curta demais
 JSON_ATTEMPTS = 3     # tentativas por JSON invalido devolvido pelo modelo
+# Esperas pelo limite de tokens por minuto da Groq (plano gratuito: 8.000). Duas
+# chamadas seguidas ja estouram, e o bot faz isso quando a narracao sai curta e
+# ele tenta de novo na hora. As esperas crescem ate 60s, que zera a janela.
+RATE_LIMIT_ATTEMPTS = 5
 MIN_SCENES = 8
 MAX_SCENES = 14
 
@@ -155,6 +160,30 @@ def _is_malformed_json_error(exc: Exception) -> bool:
     return isinstance(exc, BadRequestError) and "json_validate_failed" in str(exc)
 
 
+def _is_daily_limit(exc: Exception) -> bool:
+    """Limite diario (tokens ou requisicoes por dia) nao se resolve esperando
+    alguns segundos: tentar de novo so atrasaria uma falha inevitavel."""
+    return "per day" in str(exc)
+
+
+def _rate_limit_wait(exc: Exception, attempt: int) -> float:
+    """Quanto esperar antes de tentar de novo, em segundos.
+
+    Usa o maior entre o que a Groq pede no cabecalho e uma espera que dobra a
+    cada tentativa (5, 10, 20, 40, 60). So o cabecalho nao basta: ele pediu
+    menos de 1s no teste, e o proprio SDK da Groq ja tinha tentado de novo com
+    esperas curtas e falhado duas vezes antes de devolver o erro."""
+    backoff = 5.0 * 2 ** (attempt - 1)
+    headers = getattr(getattr(exc, "response", None), "headers", None) or {}
+    for key, scale in (("retry-after-ms", 0.001), ("retry-after", 1.0)):
+        try:
+            backoff = max(backoff, float(headers.get(key)) * scale + 1.0)
+            break
+        except (TypeError, ValueError):
+            continue
+    return min(60.0, backoff)
+
+
 def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
     """Pede o roteiro em JSON e devolve o dict. Ver REASONING_EFFORT: sem ele o
     modo JSON deste modelo falha sempre."""
@@ -168,12 +197,24 @@ def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
     if REASONING_EFFORT:
         params["reasoning_effort"] = REASONING_EFFORT
 
-    for attempt in range(1, JSON_ATTEMPTS + 1):
+    # contadores separados: esperar pelo limite nao gasta tentativa de JSON
+    attempt = 0
+    rate_limited = 0
+    while True:
         try:
             content = client.chat.completions.create(**params).choices[0].message.content
             return sanitize(json.loads(content))
+        except RateLimitError as exc:
+            rate_limited += 1
+            if _is_daily_limit(exc) or rate_limited > RATE_LIMIT_ATTEMPTS:
+                raise
+            wait = _rate_limit_wait(exc, rate_limited)
+            print(f"  [script] limite de tokens por minuto da Groq, esperando {wait:.0f}s "
+                  f"({rate_limited}/{RATE_LIMIT_ATTEMPTS}).")
+            time.sleep(wait)
         except Exception as exc:
-            if not _is_malformed_json_error(exc) or attempt == JSON_ATTEMPTS:
+            attempt += 1
+            if not _is_malformed_json_error(exc) or attempt >= JSON_ATTEMPTS:
                 raise
             print(f"  [script] o modelo devolveu JSON invalido, tentando de novo "
                   f"({attempt}/{JSON_ATTEMPTS}).")
