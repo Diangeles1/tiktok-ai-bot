@@ -7,6 +7,7 @@ import getpass
 import os
 import re
 import subprocess
+import time
 
 from src import github_secrets
 from src.env_file import ENV_FILE, read_env_file, update_env_file
@@ -55,8 +56,49 @@ def ask(label: str, key: str, secret: bool = False) -> str:
     return value
 
 
+def _win_clipboard(clear: bool) -> str:
+    """Area de transferencia pela API do Windows. O tkinter nao serve para
+    ler de novo depois de limpar: ele passa a se achar dono do conteudo e
+    devolve vazio para sempre, mesmo com outro programa copiando por cima."""
+    import ctypes
+    from ctypes import wintypes
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.GetClipboardData.restype = ctypes.c_void_p
+    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    for _ in range(10):   # outro programa pode estar com ela aberta por um instante
+        if user32.OpenClipboard(None):
+            break
+        time.sleep(0.05)
+    else:
+        return ""
+    try:
+        if clear:
+            user32.EmptyClipboard()
+            return ""
+        handle = user32.GetClipboardData(13)   # CF_UNICODETEXT
+        if not handle:
+            return ""
+        pointer = kernel32.GlobalLock(handle)
+        if not pointer:
+            return ""
+        try:
+            return ctypes.wstring_at(pointer)
+        finally:
+            kernel32.GlobalUnlock(handle)
+    finally:
+        user32.CloseClipboard()
+
+
 def _clipboard(clear: bool = False) -> str:
     """Le (ou limpa) a area de transferencia do sistema. Vazio se nao der."""
+    if os.name == "nt":
+        try:
+            return _win_clipboard(clear)
+        except Exception:
+            return ""
     try:
         import tkinter
         root = tkinter.Tk()
@@ -94,6 +136,32 @@ def ask_copied(label: str, key: str, looks_right, hint_format: str) -> str:
             return saved
         print(f"  O que esta copiado nao parece o {label} ({hint_format}). Copie de novo.")
     raise SystemExit(f"Nao consegui pegar o {label}. Rode o comando de novo.")
+
+
+def wait_copied(label: str, looks_right, ignore=(), timeout: int = 1200,
+                accept_current: bool = False) -> str:
+    """Espera a pessoa copiar o valor no site, sem precisar de terminal: olha a
+    area de transferencia a cada segundo ate aparecer algo com o formato certo.
+    Por padrao o que ja estava copiado antes de comecar e descartado; com
+    accept_current, vale se ja tiver o formato certo (a pessoa copiou antes)."""
+    print(f"Esperando voce copiar: {label}...", flush=True)
+    skip = {""} | set(ignore)
+    already = _clean_paste(_clipboard())
+    if accept_current and already and already not in skip and looks_right(already):
+        print(f"  Recebido: {label} ({len(already)} caracteres).", flush=True)
+        return already
+    # limpa em vez de so ignorar o que estava copiado: se a pessoa ja tinha
+    # copiado o valor certo antes, copiar de novo nao mudaria nada e o script
+    # ficaria esperando para sempre
+    _clipboard(clear=True)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        value = _clean_paste(_clipboard())
+        if value and value not in skip and looks_right(value):
+            print(f"  Recebido: {label} ({len(value)} caracteres).", flush=True)
+            return value
+        time.sleep(1)
+    raise SystemExit(f"Nenhum {label} copiado em {timeout // 60} minutos. Rode de novo.")
 
 
 def github_repo() -> str | None:

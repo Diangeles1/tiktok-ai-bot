@@ -193,14 +193,19 @@ significa refazer os vídeos. Enquanto ele não for trocado, o log avisa a cada 
 ### 6. Conecte a conta do TikTok (uma única vez, na sua máquina)
 
 ```bash
-python -m src.oauth_setup
+python -m src.oauth_setup --sem-terminal
 ```
 
-O script pede o `Client key` e o `Client secret` do passo 5 (o secret fica invisível
-enquanto você cola), abre o navegador para você autorizar com a conta do TikTok que vai
-postar e pede o `code` que aparece na página de retorno. As chaves vão direto para o
-`.env` e, com o `GH_PAT` do passo 7 já configurado, também para os Secrets do GitHub.
-Nenhum token aparece na tela.
+Nada é colado no terminal: o script lê a área de transferência. Na página do app,
+revele o `Client key` e o `Client secret` do passo 5 (ícone de olho), selecione os dois e
+copie; o script separa um do outro sozinho. Ele abre o navegador para você autorizar com
+a conta que vai postar; na página de retorno, selecione o `code` e copie. As chaves vão
+direto para o `.env` e, com o `GH_PAT` do passo 7 já configurado, também para os Secrets
+do GitHub. Nenhum token aparece na tela, e a área de transferência é limpa no fim.
+
+Sem o `--sem-terminal`, o script pede um Enter depois de cada cópia. Colar a chave no
+terminal não é usado de propósito: em vários terminais do Windows a colagem chega vazia
+ou com caracteres invisíveis, e a plataforma recusa a chave.
 
 O endereço de retorno é deduzido do repositório
 (`https://SEU-USUARIO.github.io/SEU-REPO/oauth-callback.html`) e as permissões seguem o
@@ -248,15 +253,25 @@ normalmente, só sem a capa.
 python -m src.youtube_oauth_setup
 ```
 
-O script pede o `Client ID` e o `Client secret` do passo 8, abre o navegador para você
-entrar com a conta do canal que vai receber os Shorts e grava as chaves no `.env` e nos
-Secrets do GitHub, do mesmo jeito que o passo 6.
+O script pede para copiar (botão de copiar do Google Cloud) o `Client ID` e o
+`Client secret` do passo 8, apertando Enter depois de cada um. Ele confere o formato
+antes de seguir: o ID termina em `.apps.googleusercontent.com` e o secret começa com
+`GOCSPX-`. Depois abre o navegador para você entrar com a conta do canal e grava as
+chaves no `.env` e nos Secrets do GitHub, do mesmo jeito que o passo 6.
+
+O Google mostra o Client secret uma vez só, na hora em que ele é criado. Se precisar
+trocar (por exemplo, se ele vazar), crie outro na credencial e rode
+`python -m src.push_secrets --novo-secret-youtube`: o script pega o secret novo pela
+área de transferência, ignora o antigo e atualiza o `.env` e o GitHub. O acesso ao
+canal continua valendo, sem precisar conectar de novo.
 
 ### 10. Confira os Secrets no repositório
 
 Os horários automáticos leem as chaves dos Secrets do GitHub, não do `.env`. Os passos
-6 e 9 já gravam lá quando o `GH_PAT` existe. Para mandar tudo de uma vez (por exemplo,
-depois de trocar a chave da Groq), rode de novo:
+6 e 9 já gravam lá quando o `GH_PAT` existe. Os Secrets saem do seu computador já
+criptografados e o GitHub não mostra o valor para ninguém, só deixa substituir ou apagar.
+Para trocar a chave da Groq, crie a nova no console, copie e rode
+`python -m src.push_secrets --nova-groq`. Para mandar tudo de uma vez, rode:
 
 ```bash
 python -m src.push_secrets
