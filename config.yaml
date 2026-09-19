@@ -18,7 +18,7 @@ branding:
   # Aparece como marca d'agua no video, repetida ao longo do tempo. Serve para
   # duas coisas: identidade de canal e dificultar que outro perfil baixe o video
   # e reposte, porque tapar a marca em varios pontos da mais trabalho que vale.
-  handle: "@canal"
+  handle: "@candeiabiblica"
   watermark_enabled: true
   watermark_opacity: 0.35
   watermark_repeats: 4     # quantas vezes a marca aparece ao longo do video
