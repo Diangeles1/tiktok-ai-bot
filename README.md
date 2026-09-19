@@ -322,7 +322,8 @@ Tudo abaixo fica em `config.yaml`.
 | `captions.words_per_chunk` / `captions.bottom_margin` | Palavras por vez na legenda e distância até a base do vídeo. O padrão (420 px) mantém o texto acima da interface do TikTok |
 | `thumbnail.enabled` | Liga ou desliga a capa |
 | `sfx.music_enabled` / `sfx.music_volume` | Trilha de fundo sorteada de `assets/music/` (Mixkit, licença livre). Adicione seus próprios mp3 nessa pasta para variar |
-| `hashtags_extra` | Hashtags fixas somadas às que o modelo gera para cada vídeo |
+| `hashtags_extra` | Hashtags fixas do canal, que entram primeiro em todo vídeo |
+| `hashtags_max` | Total de hashtags por vídeo (4): as fixas mais a do personagem ou tema da história |
 | `posting_hours_utc` | Horários de publicação em UTC. Precisa casar com os `cron` de `.github/workflows/daily-post.yml` |
 | `tiktok.mode` / `tiktok.privacy_level` | Modo de publicação no TikTok (ver [Publicação](#publicação-no-tiktok)) |
 | `youtube.privacy_status` | `public`, `unlisted` ou `private` |
