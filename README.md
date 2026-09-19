@@ -190,42 +190,36 @@ significa refazer os vídeos. Enquanto ele não for trocado, o log avisa a cada 
 - Em Login Kit > Redirect URI, cadastre a URL do passo 2
 - Anote `Client key` e `Client secret`
 
-### 6. Gere o primeiro refresh token do TikTok (uma única vez, na sua máquina)
-
-Rode no seu próprio terminal, porque o script imprime o token na tela:
+### 6. Conecte a conta do TikTok (uma única vez, na sua máquina)
 
 ```bash
 python -m src.oauth_setup
 ```
 
-O script pede `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` e o `redirect_uri` do passo 2,
-abre a URL de autorização (você faz login com a conta do TikTok que vai postar) e pede
-que você cole o `code` que aparece na página de callback. No final ele imprime o
-`TIKTOK_REFRESH_TOKEN`.
+O script pede o `Client key` e o `Client secret` do passo 5 (o secret fica invisível
+enquanto você cola), abre o navegador para você autorizar com a conta do TikTok que vai
+postar e pede o `code` que aparece na página de retorno. As chaves vão direto para o
+`.env` e, com o `GH_PAT` do passo 7 já configurado, também para os Secrets do GitHub.
+Nenhum token aparece na tela.
 
-Por padrão ele pede os escopos `video.upload` e `video.publish`. Se o app só tiver o
-primeiro, informe a lista antes de rodar:
+O endereço de retorno é deduzido do repositório
+(`https://SEU-USUARIO.github.io/SEU-REPO/oauth-callback.html`) e as permissões seguem o
+`tiktok.mode` do `config.yaml`: só `video.upload` no modo upload, mais `video.publish` no
+modo direto. `TIKTOK_REDIRECT_URI` e `TIKTOK_SCOPES` no ambiente trocam os dois.
+
+### 7. Crie o token do GitHub (GH_PAT)
+
+Com ele, o bot grava as chaves nos Secrets do repositório: tanto as dos passos de
+conexão quanto o `refresh_token` do TikTok, que muda a cada renovação e invalida o
+valor antigo na hora. O do YouTube não precisa disso, porque o Google não o rotaciona.
 
 ```bash
-TIKTOK_SCOPES=user.info.basic,video.upload python -m src.oauth_setup
+python -m src.push_secrets
 ```
 
-No PowerShell:
-
-```powershell
-$env:TIKTOK_SCOPES = "user.info.basic,video.upload"; python -m src.oauth_setup
-```
-
-### 7. Crie um GitHub Personal Access Token
-
-Esse token permite que o bot atualize sozinho o token do TikTok. O `refresh_token` do
-TikTok muda a cada renovação e o valor antigo é invalidado na hora, então o bot precisa
-salvar o novo valor via API do GitHub para continuar funcionando sem intervenção manual.
-O refresh_token do YouTube não precisa disso, porque o Google não o rotaciona a cada uso.
-
-- GitHub > Settings > Developer settings > Personal access tokens (classic)
-- Escopo: `repo`
-- Guarde o valor como `GH_PAT`
+Sem `GH_PAT` no `.env`, o comando abre a página de criação do GitHub com o escopo `repo`
+já marcado. Escolha uma validade longa, gere o token e cole no terminal: ele vai para o
+`.env` e as chaves que já existirem seguem para os Secrets.
 
 ### 8. Crie o projeto no Google Cloud e o app do YouTube
 
@@ -248,31 +242,40 @@ A capa customizada exige canal verificado por telefone
 ([youtube.com/verify](https://www.youtube.com/verify)). Sem isso o vídeo é publicado
 normalmente, só sem a capa.
 
-### 9. Gere o refresh token do YouTube (uma única vez, na sua máquina)
+### 9. Conecte o canal do YouTube (uma única vez, na sua máquina)
 
 ```bash
 python -m src.youtube_oauth_setup
 ```
 
-O script abre o navegador para você fazer login com a conta do YouTube que vai receber
-os Shorts, e no final imprime o `YOUTUBE_REFRESH_TOKEN`.
+O script pede o `Client ID` e o `Client secret` do passo 8, abre o navegador para você
+entrar com a conta do canal que vai receber os Shorts e grava as chaves no `.env` e nos
+Secrets do GitHub, do mesmo jeito que o passo 6.
 
-### 10. Cadastre os Secrets no repositório
+### 10. Confira os Secrets no repositório
 
-Em Settings > Secrets and variables > Actions > New repository secret:
+Os horários automáticos leem as chaves dos Secrets do GitHub, não do `.env`. Os passos
+6 e 9 já gravam lá quando o `GH_PAT` existe. Para mandar tudo de uma vez (por exemplo,
+depois de trocar a chave da Groq), rode de novo:
+
+```bash
+python -m src.push_secrets
+```
+
+Ele grava estes 8 e avisa quais ainda faltam no `.env`:
 
 | Secret | Origem |
 |---|---|
 | `GROQ_API_KEY` | passo 3 |
-| `TIKTOK_CLIENT_KEY` | passo 5 |
-| `TIKTOK_CLIENT_SECRET` | passo 5 |
+| `TIKTOK_CLIENT_KEY` | passo 6 |
+| `TIKTOK_CLIENT_SECRET` | passo 6 |
 | `TIKTOK_REFRESH_TOKEN` | passo 6 |
 | `GH_PAT` | passo 7 |
-| `YOUTUBE_CLIENT_ID` | passo 8 |
-| `YOUTUBE_CLIENT_SECRET` | passo 8 |
+| `YOUTUBE_CLIENT_ID` | passo 9 |
+| `YOUTUBE_CLIENT_SECRET` | passo 9 |
 | `YOUTUBE_REFRESH_TOKEN` | passo 9 |
 
-Para usar apenas uma das duas plataformas, deixe os secrets da outra vazios e
+Para usar apenas uma das duas plataformas, deixe as chaves da outra de fora e
 desative-a em `config.yaml` (`tiktok.enabled: false` ou `youtube.enabled: false`).
 
 ### 11. Teste manualmente antes de deixar no automático
@@ -383,5 +386,6 @@ python test_pipeline.py
 | `src/tts.py` / `src/captions.py` | Narração com timing por palavra e legendas |
 | `src/video.py` / `src/thumbnail.py` | Montagem do vídeo e da capa |
 | `src/tiktok_api.py` / `src/youtube_api.py` | Publicação nas duas plataformas |
-| `src/oauth_setup.py` / `src/youtube_oauth_setup.py` | Geração dos tokens (roda uma única vez) |
+| `src/oauth_setup.py` / `src/youtube_oauth_setup.py` | Conexão das contas (roda uma única vez), gravando as chaves no `.env` e nos Secrets |
+| `src/push_secrets.py` | Manda as chaves do `.env` para os Secrets do GitHub |
 | `src/github_secrets.py` | Salva o token renovado do TikTok nos Secrets do repositório |
