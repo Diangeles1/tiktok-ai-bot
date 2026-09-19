@@ -17,10 +17,15 @@ def synthesize_scene_audio(text: str, voice: str, out_path: str) -> str:
     return out_path
 
 
-async def _synthesize_with_timings(text: str, voice: str, out_path: str) -> list[dict]:
+async def _synthesize_with_timings(text: str, voice: str, out_path: str,
+                                    rate: str | None = None) -> list[dict]:
     # edge-tts >=7 so envia timing por palavra se boundary="WordBoundary" for
     # pedido explicitamente (o padrao da lib mudou para "SentenceBoundary").
-    communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary")
+    # rate acelera a leitura. A voz padrao fica arrastada para formato curto, e
+    # o edge-tts reajusta os timings de palavra junto, entao a legenda continua
+    # sincronizada sem nenhuma conta extra do nosso lado.
+    extra = {"rate": rate} if rate else {}
+    communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary", **extra)
     word_timings = []
     with open(out_path, "wb") as f:
         async for chunk in communicate.stream():
@@ -35,9 +40,10 @@ async def _synthesize_with_timings(text: str, voice: str, out_path: str) -> list
     return word_timings
 
 
-def synthesize_with_timings(text: str, voice: str, out_path: str) -> tuple[str, list[dict]]:
+def synthesize_with_timings(text: str, voice: str, out_path: str,
+                             rate: str | None = None) -> tuple[str, list[dict]]:
     """Gera o audio e retorna tambem o timing (inicio/fim em segundos) de cada
     palavra, usado para montar legendas animadas sincronizadas com a fala."""
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    word_timings = asyncio.run(_synthesize_with_timings(text, voice, out_path))
+    word_timings = asyncio.run(_synthesize_with_timings(text, voice, out_path, rate))
     return out_path, word_timings

@@ -2,8 +2,13 @@ name: Daily AI video post (TikTok + YouTube Shorts)
 
 on:
   schedule:
-    # 13:00 UTC = 10:00 America/Sao_Paulo (UTC-3, sem horario de verao)
-    - cron: "0 13 * * *"
+    # O Brasil e UTC-3 (sem horario de verao). Tres publicacoes por dia, nos
+    # horarios em que o publico costuma estar ativo. Precisa casar com
+    # posting_hours_utc no config.yaml: e de la que o bot deduz qual publicacao
+    # esta rodando, para cada uma pegar um tema diferente.
+    - cron: "0 9 * * *"    # 06h de Brasilia, devocional da manha
+    - cron: "0 15 * * *"   # 12h de Brasilia, horario de almoco
+    - cron: "0 23 * * *"   # 20h de Brasilia, noite
   workflow_dispatch:
     inputs:
       dry_run:
@@ -17,7 +22,9 @@ permissions:
 jobs:
   generate-and-post:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # o formato em cenas gera uma imagem por cena e renderiza movimento de camera
+    # quadro a quadro, entao o render leva bem mais que o do personagem fixo
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +40,10 @@ jobs:
 
       - name: Rodar pipeline
         env:
+          # sem isso o Python bufferiza a saida (o passo do Actions e um pipe,
+          # nao um terminal) e o log so aparece no fim. Se a execucao estourar
+          # o timeout, ela e morta e o log vai junto, justo quando ele importa.
+          PYTHONUNBUFFERED: "1"
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
@@ -50,5 +61,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: video-${{ github.run_id }}
-          path: output/**/final.mp4
+          # o metadata.json diz qual gancho e tema foram usados, para cruzar com
+          # a retencao no YouTube Studio depois. O painel local baixa este
+          # artifact para postar no TikTok, e o publicacao.json diz o que ja
+          # saiu no YouTube (sem ele o painel ofereceria publicar de novo)
+          path: |
+            output/**/final.mp4
+            output/**/thumbnail.jpg
+            output/**/metadata.json
+            output/**/publicacao.json
           retention-days: 14

@@ -1,6 +1,8 @@
-"""Script de configuracao inicial: roda UMA vez, na sua maquina, para obter
-o refresh_token do YouTube. Abre o navegador para voce logar com a conta do
-YouTube que vai receber os Shorts.
+"""Conecta o canal do YouTube: roda UMA vez, na sua maquina.
+
+Pede o Client ID e o Client secret, abre o navegador para voce entrar com a
+conta do canal que vai receber os Shorts e grava as chaves direto no .env e,
+com GH_PAT configurado, nos Secrets do GitHub. O token nunca aparece na tela.
 
 Pre-requisitos (ver README.md):
   1. Criar um projeto no Google Cloud Console e ativar a "YouTube Data API v3".
@@ -11,16 +13,27 @@ Pre-requisitos (ver README.md):
 Uso:
     python -m src.youtube_oauth_setup
 """
-import os
+import sys
 
 from google_auth_oauthlib.flow import InstalledAppFlow
+
+from src import credentials
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
 
 def main() -> None:
-    client_id = os.environ.get("YOUTUBE_CLIENT_ID") or input("YOUTUBE_CLIENT_ID: ").strip()
-    client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET") or input("YOUTUBE_CLIENT_SECRET: ").strip()
+    print("Conectando o canal do YouTube.\n")
+    # os dois vem da area de transferencia: colar no terminal falhava em
+    # silencio ou trazia caracteres invisiveis, e o Google recusava a chave
+    client_id = credentials.ask_copied(
+        "Client ID", "YOUTUBE_CLIENT_ID",
+        lambda v: v.endswith(".apps.googleusercontent.com") and " " not in v,
+        "ele termina em .apps.googleusercontent.com")
+    client_secret = credentials.ask_copied(
+        "Client secret", "YOUTUBE_CLIENT_SECRET",
+        lambda v: v.startswith("GOCSPX-") and " " not in v,
+        "ele comeca com GOCSPX-")
 
     client_config = {
         "installed": {
@@ -33,14 +46,30 @@ def main() -> None:
     }
 
     flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-    print("\nUm navegador vai abrir. Faca login com a conta do YouTube que vai postar os Shorts.")
-    print("Se aparecer o aviso 'O Google não verificou este app', clique em "
-          "'Avancado' > 'Acessar [nome do app] (não seguro)' — e normal para apps pessoais.\n")
-    creds = flow.run_local_server(port=0)
+    print("\nUm navegador vai abrir. Entre com a conta do YouTube que vai postar os Shorts.")
+    print("Se aparecer 'O Google nao verificou este app', clique em 'Avancado' e depois em")
+    print("'Acessar (nao seguro)': e normal para app pessoal, e quem esta logando e voce.\n")
+    # prompt=consent: sem ele, quem ja autorizou antes nao recebe refresh_token
+    try:
+        creds = flow.run_local_server(
+            port=0, prompt="consent",
+            authorization_prompt_message="Se o navegador nao abrir, acesse:\n  {url}\n",
+            success_message="Pronto! Pode fechar esta aba e voltar ao terminal.",
+        )
+    except Exception as exc:
+        if "invalid_client" in str(exc):
+            sys.exit("\nO Google recusou o Client ID ou o Client secret. Confira os dois "
+                     "na credencial do Google Cloud e rode de novo.")
+        raise
+    if not creds.refresh_token:
+        sys.exit("O Google nao devolveu o token de longa duracao. Rode o comando de novo.")
 
-    print("\nSucesso! Salve este valor como Secret no GitHub "
-          "(Settings > Secrets and variables > Actions):\n")
-    print(f"YOUTUBE_REFRESH_TOKEN = {creds.refresh_token}")
+    credentials.save({
+        "YOUTUBE_CLIENT_ID": client_id,
+        "YOUTUBE_CLIENT_SECRET": client_secret,
+        "YOUTUBE_REFRESH_TOKEN": creds.refresh_token,
+    })
+    print("\nYouTube conectado.")
 
 
 if __name__ == "__main__":

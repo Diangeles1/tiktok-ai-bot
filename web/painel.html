@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="painel-token" content="{{TOKEN}}">
+<title>Painel do canal</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23a8731f'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f5f2ec;
+    --surface: #ffffff;
+    --surface-2: #faf7f2;
+    --text: #1f1b16;
+    --muted: #6d655a;
+    --border: #e6dfd3;
+    --accent: #a8731f;
+    --accent-strong: #8c5f16;
+    --accent-ink: #ffffff;
+    --ok: #2f7d4f;
+    --ok-bg: #e5f3ea;
+    --err: #b3261e;
+    --err-bg: #fbe9e7;
+    --warn: #7a5000;
+    --warn-bg: #fff2d4;
+    --shadow: 0 1px 2px rgba(31, 27, 22, .05), 0 6px 18px rgba(31, 27, 22, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11100e;
+      --surface: #1b1916;
+      --surface-2: #23201c;
+      --text: #f0ebe2;
+      --muted: #a59c8e;
+      --border: #332e28;
+      --accent: #d8a24a;
+      --accent-strong: #e8b765;
+      --accent-ink: #1a1307;
+      --ok: #6cc793;
+      --ok-bg: #173022;
+      --err: #ff8a80;
+      --err-bg: #331a17;
+      --warn: #f2c265;
+      --warn-bg: #2f2512;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  [hidden] { display: none !important; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 12px 24px; padding: 16px 24px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .brand h1 { margin: 0; font: 600 21px/1.2 Georgia, "Times New Roman", serif; }
+  .brand .sub { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface-2); color: var(--muted); font-size: 12.5px;
+  }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: .45; }
+  .chip.ok { color: var(--text); }
+  .chip.ok .dot { background: var(--ok); opacity: 1; }
+
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 20px;
+    max-width: 1280px; margin: 0 auto; padding: 20px 24px 48px;
+  }
+  @media (max-width: 980px) { main { grid-template-columns: minmax(0, 1fr); padding: 16px; } }
+  .col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 20px;
+  }
+  h2 { margin: 0 0 12px; font-size: 16px; }
+  h3 { margin: 0 0 10px; font-size: 15px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .between { justify-content: space-between; }
+  .end { justify-content: flex-end; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0; }
+  .lbl { display: block; color: var(--muted); font-size: 12.5px; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+
+  .aviso {
+    background: var(--warn-bg); color: var(--warn); border-radius: 12px;
+    padding: 10px 14px; font-size: 14px;
+  }
+  .avisos { display: flex; flex-direction: column; gap: 8px; }
+  .avisos:empty { display: none; }
+
+  select, input[type=text] {
+    width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  }
+  input[type=text] { margin-top: 8px; }
+  #rotacao { margin: 10px 0 16px; }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 10px; padding: 9px 16px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 10px 20px; }
+  button.primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+  #prog-tema { margin: -6px 0 14px; }
+
+  .steps {
+    list-style: none; margin: 6px 0 14px; padding: 0;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px;
+  }
+  .steps li { position: relative; padding-top: 32px; text-align: center; font-size: 13px; color: var(--muted); }
+  .steps li::before {
+    content: attr(data-n); position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border);
+    background: var(--surface); line-height: 22px; font-size: 12px; font-weight: 700; z-index: 1;
+  }
+  .steps li::after {
+    content: ""; position: absolute; top: 12px; height: 2px; background: var(--border);
+    left: calc(-50% + 15px); right: calc(50% + 15px);
+  }
+  .steps li:first-child::after { display: none; }
+  .steps li.done::before { content: "\2713"; background: var(--ok); border-color: var(--ok); color: #fff; }
+  .steps li.done::after, .steps li.active::after { background: var(--ok); }
+  .steps li.active { color: var(--text); font-weight: 600; }
+  .steps li.active::before { border-color: var(--accent); color: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
+  .steps li.fail { color: var(--err); font-weight: 600; }
+  .steps li.fail::before { content: "!"; background: var(--err); border-color: var(--err); color: #fff; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); } }
+
+  .status-line { margin: 0 0 14px; font-size: 14px; }
+  .cenas { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .cenas:empty { display: none; }
+  .cena {
+    position: relative; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 8px;
+    background: var(--surface-2); border: 1px solid var(--border);
+  }
+  .cena.wait {
+    background: linear-gradient(100deg, var(--surface-2) 30%, var(--border) 50%, var(--surface-2) 70%);
+    background-size: 300% 100%; animation: shimmer 1.6s linear infinite;
+  }
+  .cena img { display: block; width: 100%; height: 100%; object-fit: cover; animation: fadein .5s ease; }
+  .cena .n { position: absolute; left: 6px; bottom: 3px; color: #fff; font-size: 11px; font-weight: 700; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  @keyframes fadein { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+
+  .erro {
+    background: var(--err-bg); color: var(--err); border-radius: 12px; padding: 10px 14px;
+    font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 14px;
+  }
+  details.log summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre.log {
+    max-height: 260px; overflow: auto; margin: 8px 0 0; padding: 10px 12px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    font: 12px/1.5 ui-monospace, Consolas, "Cascadia Mono", monospace;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+
+  .video-grid { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 760px) { .video-grid { grid-template-columns: minmax(0, 1fr); } }
+  video { display: block; width: 100%; aspect-ratio: 9 / 16; max-height: 78vh; background: #000; border-radius: 12px; }
+  .downloads { margin-top: 10px; font-size: 13.5px; }
+  .eyebrow { margin: 0 0 2px; color: var(--muted); font-size: 12.5px; }
+  .v-titulo { font: 600 20px/1.3 Georgia, "Times New Roman", serif; margin: 0 0 14px; }
+  dl.meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0 0 18px; font-size: 14px; }
+  dl.meta dt { color: var(--muted); }
+  dl.meta dd { margin: 0; overflow-wrap: anywhere; }
+  .capa-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; margin-bottom: 18px; }
+  .capa-row img { width: 84px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+  .legenda { margin: 0 0 8px; font-size: 13.5px; overflow-wrap: anywhere; }
+  .publicar { border-top: 1px solid var(--border); padding-top: 16px; }
+  .opcao { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; }
+  .opcao input { flex: none; margin-top: 4px; width: 17px; height: 17px; accent-color: var(--accent); }
+  .opcao .nome { font-weight: 600; }
+  .opcao .det { display: block; color: var(--muted); font-size: 13px; }
+  .opcao.off .nome { color: var(--muted); }
+  .pub-res { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 14px; font-size: 14px; }
+  .pub-res:empty { display: none; }
+  .res { border-radius: 10px; padding: 8px 12px; overflow-wrap: anywhere; }
+  .res.ok { background: var(--ok-bg); color: var(--ok); }
+  .res.err { background: var(--err-bg); color: var(--err); }
+
+  .hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 76vh; overflow: auto; }
+  .hist button {
+    width: 100%; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 10px;
+    padding: 8px; text-align: left; background: transparent; border: 1px solid transparent;
+  }
+  .hist button:hover { background: var(--surface-2); border-color: var(--border); }
+  .hist button.sel { background: var(--surface-2); border-color: var(--accent); }
+  .hist .thumb { width: 42px; aspect-ratio: 9 / 16; border-radius: 6px; object-fit: cover; background: var(--border); }
+  .hist .t { font-size: 13.5px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .hist .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .badge { display: inline-block; margin: 4px 4px 0 0; padding: 1px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: 11px; font-weight: 600; }
+
+  /* tela de publicar direto no TikTok */
+  .tt {
+    margin: 2px 0 10px 27px; padding: 14px; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--surface-2); display: flex; flex-direction: column; gap: 14px;
+  }
+  @media (max-width: 520px) { .tt { margin-left: 0; } }
+  .tt:empty { display: none; }
+  .tt .lbl { margin-bottom: 4px; }
+  .modos { display: flex; flex-wrap: wrap; gap: 8px; }
+  .modos label {
+    display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 14px;
+  }
+  .modos label.sel { border-color: var(--accent); }
+  .modos input { accent-color: var(--accent); margin: 0; }
+  .conta { display: flex; align-items: center; gap: 10px; }
+  .conta img, .conta .ph { flex: none; width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: var(--border); }
+  .conta .quem { min-width: 0; flex: 1; }
+  .conta .n { font-weight: 600; overflow-wrap: anywhere; }
+  .conta .u { color: var(--muted); font-size: 13px; }
+  .tt textarea {
+    width: 100%; min-height: 86px; resize: vertical; font: inherit; font-size: 14px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px;
+  }
+  .tt select { background: var(--surface); }
+  .conta-linha { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+  .check { display: inline-flex; align-items: flex-start; gap: 8px; font-size: 14px; cursor: pointer; }
+  .check input { flex: none; margin: 3px 0 0; width: 16px; height: 16px; accent-color: var(--accent); }
+  .check.off { color: var(--muted); cursor: not-allowed; }
+  .check .det { display: block; color: var(--muted); font-size: 12.5px; }
+  .sub-opcoes { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 0 24px; }
+  .rotulo { font-size: 13px; color: var(--muted); margin: 8px 0 0 24px; }
+  .rotulo.falta { color: var(--err); }
+  .nota { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 8px 12px; font-size: 13.5px; }
+  .nota.err { background: var(--err-bg); color: var(--err); }
+  .nota code { font-size: 12.5px; overflow-wrap: anywhere; }
+  .declara { font-size: 13px; color: var(--muted); margin: 0; }
+  button.mini { padding: 4px 10px; font-size: 12.5px; }
+  ol.passos { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .card-head h2 { margin: 0; }
+  #buscar-msg { margin: -4px 0 10px; }
+
+  dialog {
+    width: min(440px, calc(100% - 32px)); padding: 22px; border: 1px solid var(--border);
+    border-radius: 16px; background: var(--surface); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .5); }
+  dialog p { margin: 0 0 18px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Painel do canal</h1>
+    <div class="sub" id="sub">Carregando...</div>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main>
+  <div class="col">
+    <div class="avisos" id="avisos"></div>
+
+    <section class="card" id="card-novo">
+      <h2>Novo vídeo</h2>
+      <label class="lbl" for="tema">Tema</label>
+      <select id="tema"></select>
+      <input type="text" id="tema-livre" maxlength="300" placeholder="Ex.: Pedro andando sobre as águas" hidden>
+      <p class="hint" id="rotacao"></p>
+      <div class="row">
+        <button class="primary" id="btn-gerar">Gerar vídeo</button>
+        <span class="hint">Leva alguns minutos. Nada é publicado sem você aprovar.</span>
+      </div>
+    </section>
+
+    <section class="card" id="card-prog" hidden>
+      <div class="row between">
+        <h2 id="prog-titulo">Gerando vídeo</h2>
+        <div class="row">
+          <span class="timer" id="timer">0:00</span>
+          <button id="btn-cancelar">Cancelar</button>
+        </div>
+      </div>
+      <p class="hint" id="prog-tema" hidden></p>
+      <ol class="steps" id="steps">
+        <li data-n="1">Roteiro</li>
+        <li data-n="2">Imagens</li>
+        <li data-n="3">Narração</li>
+        <li data-n="4">Montagem</li>
+        <li data-n="5">Pronto</li>
+      </ol>
+      <p class="status-line" id="status-line" aria-live="polite"></p>
+      <div class="cenas" id="cenas"></div>
+      <div class="erro" id="prog-erro" hidden></div>
+      <details class="log"><summary>Log da execução</summary><pre class="log" id="log"></pre></details>
+    </section>
+
+    <section class="card" id="card-video" hidden>
+      <div class="video-grid">
+        <div>
+          <video id="player" controls playsinline preload="metadata"></video>
+          <div class="row downloads">
+            <a id="dl-video" download>Baixar vídeo</a>
+            <a id="dl-capa" download>Baixar capa</a>
+          </div>
+        </div>
+        <div>
+          <p class="eyebrow" id="v-quando"></p>
+          <h2 class="v-titulo" id="v-titulo"></h2>
+          <dl class="meta" id="v-meta"></dl>
+          <div class="capa-row">
+            <img id="v-capa" alt="Capa do vídeo">
+            <div>
+              <span class="lbl">Legenda do TikTok</span>
+              <p class="legenda" id="v-legenda"></p>
+              <button id="btn-copiar">Copiar legenda</button>
+            </div>
+          </div>
+          <div class="publicar">
+            <h3>Publicar</h3>
+            <div id="pub-opcoes"></div>
+            <div class="pub-res" id="pub-res" aria-live="polite"></div>
+            <div class="row">
+              <button class="primary" id="btn-publicar">Publicar</button>
+              <span class="hint" id="pub-hint"></span>
+            </div>
+            <pre class="log" id="pub-log" hidden></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <aside class="col">
+    <section class="card">
+      <div class="card-head">
+        <h2>Vídeos gerados</h2>
+        <button class="mini" id="btn-buscar" hidden>Buscar do automático</button>
+      </div>
+      <p class="hint" id="buscar-msg" hidden></p>
+      <ul class="hist" id="hist"></ul>
+      <p class="hint" id="hist-vazio" hidden>Nenhum vídeo gerado ainda.</p>
+    </section>
+  </aside>
+</main>
+
+<dialog id="dlg">
+  <h3>Publicar agora?</h3>
+  <p id="dlg-texto"></p>
+  <div class="row end">
+    <button id="dlg-nao">Cancelar</button>
+    <button class="primary" id="dlg-sim">Publicar</button>
+  </div>
+</dialog>
+
+<script>
+const TOKEN = document.querySelector('meta[name="painel-token"]').content;
+const $ = (id) => document.getElementById(id);
+const NOMES = { tiktok: 'TikTok', youtube: 'YouTube' };
+const OUTRO = '__outro';
+
+const st = {
+  estado: null,
+  runs: [],
+  atual: null,       // pasta do video aberto no cartao
+  job: null,         // ultima foto da execucao em andamento
+  linhas: 0,         // quantas linhas de log ja chegaram
+  log: [],
+  polling: false,
+  base: 0,           // segundos da execucao na ultima resposta
+  baseEm: 0,         // quando essa resposta chegou
+  conta: null,       // conta do TikTok para publicar direto: null, 'carregando' ou a resposta
+  tt: null,          // escolhas da tela do TikTok para o video aberto
+};
+
+function h(tag, props = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'text') el.textContent = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat()) if (kid !== null && kid !== undefined) el.append(kid);
+  return el;
+}
+
+async function api(path, body) {
+  const opts = body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) };
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-Painel-Token': TOKEN },
+  });
+  let data = {};
+  try { data = await res.json(); } catch (_) { /* resposta sem corpo */ }
+  if (!res.ok) throw new Error(data.erro || `Erro ${res.status}`);
+  return data;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const arquivo = (run, rel, v) => `/arquivos/${encodeURIComponent(run)}/${rel}${v ? `?v=${Math.round(v)}` : ''}`;
+const mmss = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const quando = (epoch) => new Date(epoch * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const quandoIso = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+const rodando = () => st.job && st.job.status === 'rodando';
+
+function aviso(texto) { $('avisos').append(h('div', { class: 'aviso', text: texto })); }
+
+/* ---------- estado geral ---------- */
+
+function renderEstado(e) {
+  st.estado = e;
+  $('sub').textContent = `${e.handle || 'sem @ definido'} · fase ${e.fase}`;
+
+  const chips = $('chips');
+  chips.replaceChildren();
+  for (const [nome, rotulo] of [['groq', 'Groq'], ['tiktok', 'TikTok'], ['youtube', 'YouTube'], ['github', 'GitHub']]) {
+    const ok = e.credenciais[nome];
+    chips.append(h('span', { class: `chip${ok ? ' ok' : ''}`, title: ok ? 'Chaves encontradas no .env' : 'Chaves ausentes no .env' },
+      h('span', { class: 'dot' }), rotulo));
+  }
+
+  $('btn-buscar').hidden = !e.credenciais.github;
+
+  $('avisos').replaceChildren();
+  if (!e.env_encontrado) aviso('Arquivo .env não encontrado. Sem as chaves, o painel não consegue gerar nem publicar.');
+  else if (!e.credenciais.groq) aviso('Falta a GROQ_API_KEY no .env. Sem ela o roteiro não é gerado.');
+  if (e.handle_provisorio) aviso('A marca d\'água ainda está com o @ provisório (@canal). Troque branding.handle no config.yaml antes de publicar.');
+
+  const sel = $('tema');
+  if (!sel.options.length) {
+    sel.append(h('option', { value: '', text: `Tema da vez: ${e.proximo.tema || 'livre'}` }));
+    const grupo = h('optgroup', { label: 'Todos os temas' });
+    for (const t of e.temas) grupo.append(h('option', { value: t, text: t }));
+    sel.append(grupo, h('option', { value: OUTRO, text: 'Outro tema...' }));
+  }
+  const partes = [];
+  if (e.proximo.gancho) partes.push(`Gancho: ${e.proximo.gancho}`);
+  if (e.proximo.arco) partes.push(`Arco: ${e.proximo.arco}`);
+  let texto = partes.join(' · ');
+  if (e.proximo.horario_brasilia !== null && e.proximo.horario_brasilia !== undefined) {
+    texto += `. O tema da vez é o mesmo que a publicação automática das ${e.proximo.horario_brasilia}h vai usar.`;
+  }
+  $('rotacao').textContent = texto;
+}
+
+$('tema').addEventListener('change', () => {
+  const outro = $('tema').value === OUTRO;
+  $('tema-livre').hidden = !outro;
+  if (outro) $('tema-livre').focus();
+});
+
+/* ---------- historico ---------- */
+
+function ultimaTentativa(pub, plataforma) {
+  const tentativas = (pub && pub[plataforma]) || [];
+  return [...tentativas].reverse().find((t) => t.ok) || tentativas[tentativas.length - 1] || null;
+}
+
+async function carregarExecucoes() {
+  st.runs = await api('/api/execucoes');
+  renderHistorico();
+}
+
+function renderHistorico() {
+  const lista = $('hist');
+  lista.replaceChildren();
+  $('hist-vazio').hidden = st.runs.length > 0;
+  for (const run of st.runs) {
+    const m = run.metadata;
+    const badges = ['youtube', 'tiktok']
+      .filter((p) => (ultimaTentativa(run.publicacao, p) || {}).ok)
+      .map((p) => h('span', { class: 'badge', text: NOMES[p] }));
+    const detalhe = [quando(run.modificado), m.duracao_segundos ? `${String(m.duracao_segundos).replace('.', ',')}s` : null,
+      run.automatico ? 'automático' : null]
+      .filter(Boolean).join(' · ');
+    lista.append(h('li', {}, h('button', {
+      class: run.nome === st.atual ? 'sel' : null,
+      onclick: () => abrirExecucao(run.nome),
+    },
+      run.tem_capa ? h('img', { class: 'thumb', src: arquivo(run.nome, 'thumbnail.jpg', run.modificado), alt: '', loading: 'lazy' })
+                   : h('span', { class: 'thumb' }),
+      h('span', {},
+        h('span', { class: 't', text: m.titulo_youtube || m.tema || run.nome }),
+        h('span', { class: 'd', text: detalhe }),
+        badges.length ? h('span', {}, badges) : null))));
+  }
+}
+
+/* ---------- video aberto ---------- */
+
+function abrirExecucao(nome) {
+  const run = st.runs.find((r) => r.nome === nome);
+  if (!run) return;
+  st.atual = nome;
+  renderHistorico();
+  const m = run.metadata;
+  $('card-video').hidden = false;
+
+  const src = arquivo(nome, 'final.mp4', run.modificado);
+  if ($('player').getAttribute('src') !== src) $('player').setAttribute('src', src);
+  $('dl-video').href = src;
+  $('dl-video').hidden = !run.tem_video;
+  $('dl-capa').href = arquivo(nome, 'thumbnail.jpg', run.modificado);
+  $('dl-capa').hidden = !run.tem_capa;
+
+  $('v-quando').textContent = `Gerado em ${quando(run.modificado)}${run.automatico ? ' pelo horário automático' : ''}`;
+  $('v-titulo').textContent = m.titulo_youtube || m.tema || nome;
+  const itens = [
+    ['Tema', m.tema],
+    ['Passagem', m.passagem || 'não informada'],
+    ['Gancho', m.gancho],
+    ['Arco', m.arco],
+    ['Fase', m.fase],
+    ['Duração', m.duracao_segundos ? `${String(m.duracao_segundos).replace('.', ',')} s` : null],
+    ['Primeira frase', m.primeira_frase],
+  ].filter(([, v]) => v);
+  $('v-meta').replaceChildren(...itens.flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]));
+
+  $('v-capa').hidden = !run.tem_capa;
+  if (run.tem_capa) $('v-capa').src = arquivo(nome, 'thumbnail.jpg', run.modificado);
+  // videos antigos nao tem a legenda pronta: monta igual ao main.py
+  $('v-legenda').textContent = m.legenda_tiktok
+    || [m.titulo_youtube, ...(m.hashtags || [])].filter(Boolean).join(' ');
+
+  renderPublicacao(run);
+}
+
+function renderPublicacao(run) {
+  const e = st.estado;
+  const caixa = $('pub-opcoes');
+  caixa.replaceChildren();
+  for (const p of ['tiktok', 'youtube']) {
+    const cfg = e ? e.plataformas[p] : { ativo: false };
+    const feito = (ultimaTentativa(run.publicacao, p) || {}).ok;
+    let det;
+    let pode = cfg.ativo && cfg.credenciais;
+    if (!cfg.ativo) det = 'Desativado no config.yaml.';
+    else if (!cfg.credenciais) det = 'Faltam as chaves no .env.';
+    else if (p === 'tiktok' && cfg.painel_direto) det = 'Pelo site (PC), direto no perfil ou pelo app do celular.';
+    else if (p === 'tiktok') det = cfg.modo === 'upload'
+      ? 'Vai para a caixa de entrada do app. Você finaliza a postagem no celular.'
+      : 'Publica direto no perfil.';
+    else det = `Sai como ${{ public: 'público', unlisted: 'não listado', private: 'privado' }[cfg.privacidade] || cfg.privacidade}.`;
+    if (feito && pode) det = `Já publicado. Marque só se quiser publicar de novo. ${det}`;
+    // videos baixados antes de o automatico mandar o publicacao.json: nao da
+    // para saber se o YouTube ja saiu, entao nao marca para nao duplicar
+    const semRegistro = run.automatico && p === 'youtube' && !((run.publicacao || {})[p] || []).length;
+    if (semRegistro && pode) det = 'Veio do horário automático, que já publica no YouTube. Confira no YouTube Studio antes de marcar.';
+    const input = h('input', { type: 'checkbox', id: `pub-${p}`, value: p, disabled: !pode,
+      onchange: () => { if (p === 'tiktok') renderTikTok(); atualizarBotaoPublicar(); } });
+    input.checked = pode && !feito && !semRegistro;
+    caixa.append(h('label', { class: `opcao${pode ? '' : ' off'}`, for: `pub-${p}` }, input,
+      h('span', {}, h('span', { class: 'nome', text: p === 'youtube' ? 'YouTube Shorts' : 'TikTok' }), h('span', { class: 'det', id: `det-${p}`, text: det }))));
+    if (p === 'tiktok') caixa.append(h('div', { class: 'tt', id: 'tt' }));
+  }
+
+  const res = $('pub-res');
+  res.replaceChildren();
+  for (const p of ['youtube', 'tiktok']) {
+    const t = ultimaTentativa(run.publicacao, p);
+    if (!t) continue;
+    if (t.ok && p === 'youtube') {
+      res.append(h('div', { class: 'res ok' }, `Publicado no YouTube em ${quandoIso(t.quando)}. `,
+        h('a', { href: t.url, target: '_blank', rel: 'noopener', text: 'Abrir o Short' })));
+    } else if (t.ok) {
+      res.append(h('div', { class: 'res ok', text: t.modo === 'site'
+        ? `Postado pelo site do TikTok em ${quandoIso(t.quando)}.`
+        : t.modo === 'upload'
+        ? `Enviado para a caixa de entrada do TikTok em ${quandoIso(t.quando)}. Abra o app no celular para finalizar a postagem.`
+        : `Publicado no TikTok em ${quandoIso(t.quando)}${t.privacidade ? ` (quem pode ver: ${PRIVACIDADES[t.privacidade] || t.privacidade})` : ''}. `
+          + 'Pode levar alguns minutos para o TikTok processar o vídeo e ele aparecer no perfil.' }));
+    } else {
+      res.append(h('div', { class: 'res err', text: `Falhou no ${NOMES[p]} (${quandoIso(t.quando)}): ${t.erro}` }));
+    }
+  }
+  iniciarTikTok(run);
+  atualizarBotaoPublicar();
+}
+
+/* ---------- tela de publicar direto no TikTok ----------
+   Segue as regras da revisao do app no TikTok: mostra a conta que vai
+   receber o post, quem pode ver vem das opcoes da conta e sem nada
+   pre-escolhido, comentario/dueto/costura desmarcados (e travados se a
+   conta desligou), divulgacao comercial desligada por padrao, conteudo de
+   marca nao pode ser "Somente eu", e o aviso de musica antes de publicar. */
+
+const PRIVACIDADES = {
+  PUBLIC_TO_EVERYONE: 'Todos',
+  FOLLOWER_OF_CREATOR: 'Seguidores',
+  MUTUAL_FOLLOW_FRIENDS: 'Amigos (seguidores que você segue de volta)',
+  SELF_ONLY: 'Somente eu',
+};
+const LINK_MUSICA = 'https://www.tiktok.com/legal/page/global/music-usage-confirmation/en';
+const LINK_MARCA = 'https://www.tiktok.com/legal/page/global/bc-policy/en';
+
+const ttAtivo = () => {
+  const e = st.estado;
+  return !!(e && e.plataformas.tiktok.painel_direto && e.plataformas.tiktok.ativo && e.plataformas.tiktok.credenciais);
+};
+const ttMarcado = () => { const el = $('pub-tiktok'); return !!(el && el.checked && !el.disabled); };
+const contaOk = () => st.conta && st.conta !== 'carregando' && st.conta.ok;
+
+function iniciarTikTok(run) {
+  if (!ttAtivo()) { renderTikTok(); return; }
+  if (!st.tt || st.tt.run !== run.nome) {
+    const m = run.metadata;
+    st.tt = {
+      run: run.nome,
+      // ate o app ser aprovado, o jeito de sair publico sem celular e o site
+      modo: st.estado.plataformas.tiktok.app_aprovado ? 'direto' : 'site',
+      legenda: m.legenda_tiktok || [m.titulo_youtube, ...(m.hashtags || [])].filter(Boolean).join(' '),
+      duracao: m.duracao_segundos || null,
+      privacidade: '',
+      comentario: false, dueto: false, costura: false,
+      divulgacao: false, sua_marca: false, conteudo_de_marca: false,
+      ia: true,
+    };
+  }
+  renderTikTok();
+  if (st.tt.modo === 'direto' && !st.conta) carregarConta();
+}
+
+async function carregarConta() {
+  st.conta = 'carregando';
+  renderTikTok();
+  try {
+    st.conta = await api('/api/tiktok/conta', {});
+  } catch (err) {
+    st.conta = { ok: false, motivo: 'erro', mensagem: err.message };
+  }
+  // a opcao escolhida pode nao existir mais para esta conta
+  if (contaOk() && st.tt && !st.conta.privacidades.includes(st.tt.privacidade)) st.tt.privacidade = '';
+  renderTikTok();
+  atualizarBotaoPublicar();
+}
+
+function mudarTT(campo, valor) {
+  st.tt[campo] = valor;
+  if (campo === 'divulgacao' && !valor) { st.tt.sua_marca = false; st.tt.conteudo_de_marca = false; }
+  // conteudo de marca nao pode ser privado: desfaz a escolha em vez de deixar invalida
+  if (st.tt.divulgacao && st.tt.conteudo_de_marca && st.tt.privacidade === 'SELF_ONLY') st.tt.privacidade = '';
+  if (campo === 'modo' && valor === 'direto' && !st.conta) carregarConta();
+  const foco = document.activeElement && document.activeElement.id;
+  renderTikTok();
+  if (foco && $(foco)) $(foco).focus();
+  atualizarBotaoPublicar();
+}
+
+function ttCheck(id, campo, rotulo, { desligado = false, det = null, motivo = null } = {}) {
+  const input = h('input', { type: 'checkbox', id, disabled: desligado,
+    onchange: (ev) => mudarTT(campo, ev.target.checked) });
+  input.checked = !desligado && !!st.tt[campo];
+  return h('label', { class: `check${desligado ? ' off' : ''}`, for: id, title: desligado ? motivo : null }, input,
+    h('span', {}, rotulo, det ? h('span', { class: 'det', text: det }) : null));
+}
+
+function comando(texto) { return h('code', { text: texto }); }
+
+function renderTikTok() {
+  const box = $('tt');
+  if (!box) return;
+  box.replaceChildren();
+  // com a tela aberta, a linha de descricao do TikTok (caixa de entrada) sai
+  const aberta = ttAtivo() && ttMarcado() && !!st.tt;
+  if ($('det-tiktok')) $('det-tiktok').hidden = aberta;
+  if (!aberta) return;
+  const t = st.tt;
+
+  const modos = h('div', { class: 'modos', role: 'radiogroup', 'aria-label': 'Como publicar no TikTok' });
+  for (const [valor, rotulo] of [['site', 'Postar pelo site (PC)'], ['direto', 'Publicar direto no perfil'], ['app', 'Mandar para o app do celular']]) {
+    const input = h('input', { type: 'radio', name: 'tt-modo', id: `tt-modo-${valor}`, value: valor,
+      onchange: () => mudarTT('modo', valor) });
+    input.checked = t.modo === valor;
+    modos.append(h('label', { class: t.modo === valor ? 'sel' : null, for: `tt-modo-${valor}` }, input, rotulo));
+  }
+  box.append(modos);
+
+  if (t.modo === 'app') {
+    box.append(h('p', { class: 'hint', text: 'Vai para a caixa de entrada do app. Você finaliza a postagem no celular, escolhendo quem pode ver e colando a legenda.' }));
+    return;
+  }
+
+  if (t.modo === 'site') {
+    // o painel prepara tudo fora do TikTok; dentro do site quem mexe e voce,
+    // que e o que o TikTok permite enquanto o app nao e aprovado
+    box.append(h('ol', { class: 'passos' },
+      h('li', { text: 'Clique em "Preparar": a legenda é copiada, a página de upload do TikTok abre e a pasta do vídeo abre com o arquivo selecionado.' }),
+      h('li', { text: 'Arraste o vídeo da pasta para a página do TikTok.' }),
+      h('li', { text: 'Clique na descrição e aperte Ctrl+V.' }),
+      h('li', { text: 'Em "Who can watch this video", escolha Everyone e clique em Post.' }),
+      h('li', { text: 'Volte aqui e clique em "Já postei", para o painel lembrar.' })),
+      h('div', { class: 'row' },
+        h('button', { class: 'primary', id: 'tt-preparar', onclick: prepararSite, text: 'Preparar' }),
+        h('button', { id: 'tt-postei', onclick: marcarPostado, text: 'Já postei' }),
+        h('span', { class: 'hint', id: 'tt-site-msg', 'aria-live': 'polite' })));
+    return;
+  }
+
+  if (st.conta === 'carregando' || !st.conta) {
+    box.append(h('p', { class: 'hint', text: 'Consultando a conta do TikTok...' }));
+    return;
+  }
+  if (!st.conta.ok) {
+    const nota = h('div', { class: 'nota err' });
+    if (st.conta.motivo === 'permissao') {
+      nota.append('Para publicar direto daqui, ligue o Direct Post no app do TikTok for Developers e reconecte a conta com ',
+        comando('python -m src.oauth_setup --sem-terminal'), '. Até lá, use "Mandar para o app do celular".');
+    } else if (st.conta.motivo === 'reconectar') {
+      nota.append(`${st.conta.mensagem} Reconecte com `, comando('python -m src.oauth_setup --sem-terminal'), '.');
+    } else {
+      nota.append(st.conta.mensagem || 'Não consegui consultar a conta do TikTok.');
+    }
+    box.append(nota, h('div', {}, h('button', { class: 'mini', onclick: carregarConta, text: 'Tentar de novo' })));
+    return;
+  }
+
+  const c = st.conta;
+  box.append(h('div', { class: 'conta' },
+    c.avatar ? h('img', { src: c.avatar, alt: '' }) : h('span', { class: 'ph' }),
+    h('div', { class: 'quem' },
+      h('div', { class: 'n', text: `Publicando como ${c.apelido || c.usuario}` }),
+      c.usuario ? h('div', { class: 'u', text: `@${c.usuario}` }) : null),
+    h('button', { class: 'mini', onclick: carregarConta, text: 'Atualizar' })));
+
+  if (!st.estado.plataformas.tiktok.app_aprovado) {
+    box.append(h('div', { class: 'nota', text: 'O TikTok ainda não aprovou o app: até lá, a publicação direta só sai como "Somente eu". Para sair público hoje, use "Mandar para o app do celular".' }));
+  }
+  if (c.duracao_max && t.duracao && t.duracao > c.duracao_max) {
+    box.append(h('div', { class: 'nota err', text: `O vídeo tem ${String(t.duracao).replace('.', ',')} s e esta conta aceita no máximo ${c.duracao_max} s no TikTok.` }));
+  }
+
+  const area = h('textarea', { id: 'tt-legenda', maxlength: 2200,
+    oninput: (ev) => { t.legenda = ev.target.value; $('tt-cont').textContent = `${t.legenda.length}/2200`; atualizarBotaoPublicar(); } });
+  area.value = t.legenda;
+  box.append(h('div', {},
+    h('label', { class: 'lbl', for: 'tt-legenda', text: 'Legenda' }), area,
+    h('div', { class: 'conta-linha' }, h('span', { text: 'Pode editar à vontade, inclusive as hashtags.' }),
+      h('span', { id: 'tt-cont', text: `${t.legenda.length}/2200` }))));
+
+  const marcaPaga = t.divulgacao && t.conteudo_de_marca;
+  const sel = h('select', { id: 'tt-privacidade', onchange: (ev) => mudarTT('privacidade', ev.target.value) });
+  sel.append(h('option', { value: '', text: 'Escolha quem pode ver', disabled: true }));
+  for (const op of c.privacidades) {
+    const trava = op === 'SELF_ONLY' && marcaPaga;
+    sel.append(h('option', { value: op, disabled: trava,
+      text: trava ? `${PRIVACIDADES[op] || op} (conteúdo de marca não pode ser privado)` : (PRIVACIDADES[op] || op) }));
+  }
+  sel.value = t.privacidade;
+  box.append(h('div', {}, h('label', { class: 'lbl', for: 'tt-privacidade', text: 'Quem pode ver este vídeo' }), sel));
+
+  const motivo = 'Desativado nas configurações da sua conta do TikTok';
+  box.append(h('div', {}, h('span', { class: 'lbl', text: 'Permitir' }), h('div', { class: 'checks' },
+    ttCheck('tt-comentario', 'comentario', 'Comentários', { desligado: c.comentario_desligado, motivo }),
+    ttCheck('tt-dueto', 'dueto', 'Dueto', { desligado: c.dueto_desligado, motivo }),
+    ttCheck('tt-costura', 'costura', 'Costura (Stitch)', { desligado: c.costura_desligada, motivo }))));
+
+  const divulgacao = h('div', {}, h('span', { class: 'lbl', text: 'Divulgação de conteúdo comercial' }),
+    ttCheck('tt-divulgacao', 'divulgacao', 'Este vídeo promove uma marca, produto ou serviço',
+      { det: 'Ligue se o vídeo promove você, o seu negócio ou outra marca.' }));
+  if (t.divulgacao) {
+    divulgacao.append(h('div', { class: 'sub-opcoes' },
+      ttCheck('tt-sua-marca', 'sua_marca', 'Sua marca', { det: 'Você está promovendo a si mesmo ou o seu próprio negócio.' }),
+      ttCheck('tt-marca', 'conteudo_de_marca', 'Conteúdo de marca', { det: 'Você está promovendo outra marca ou um terceiro.' })));
+    const rotulo = t.conteudo_de_marca ? 'O vídeo será rotulado como "Parceria paga".'
+      : t.sua_marca ? 'O vídeo será rotulado como "Conteúdo promocional".'
+      : 'Escolha "Sua marca", "Conteúdo de marca" ou os dois.';
+    divulgacao.append(h('p', { class: `rotulo${t.conteudo_de_marca || t.sua_marca ? '' : ' falta'}`, text: rotulo }));
+  }
+  box.append(divulgacao);
+
+  box.append(ttCheck('tt-ia', 'ia', 'Rotular como conteúdo gerado por IA',
+    { det: 'As imagens e a narração dos vídeos do canal são geradas por IA.' }));
+
+  const declara = h('p', { class: 'declara' }, 'Ao publicar, você concorda com a ');
+  if (marcaPaga) {
+    declara.append(h('a', { href: LINK_MARCA, target: '_blank', rel: 'noopener', text: 'Política de Conteúdo de Marca' }), ' e a ');
+  }
+  declara.append(h('a', { href: LINK_MUSICA, target: '_blank', rel: 'noopener', text: 'Confirmação de Uso de Música' }), ' do TikTok.');
+  box.append(declara);
+}
+
+async function prepararSite() {
+  const msg = $('tt-site-msg');
+  let copiou = false;
+  // a copia vem antes de abrir a aba: com o foco na aba nova o navegador
+  // recusa escrever na area de transferencia
+  try { await navigator.clipboard.writeText(st.tt.legenda); copiou = true; } catch (_) { /* avisa abaixo */ }
+  window.open('https://www.tiktok.com/tiktokstudio/upload', '_blank', 'noopener');
+  try {
+    await api('/api/mostrar-video', { execucao: st.atual });
+  } catch (err) {
+    msg.textContent = `Não consegui abrir a pasta: ${err.message}`;
+    return;
+  }
+  msg.textContent = copiou ? 'Legenda copiada. Agora é arrastar o vídeo para a página do TikTok.'
+    : 'A legenda não foi copiada: use o botão "Copiar legenda" acima.';
+}
+
+async function marcarPostado() {
+  $('tt-postei').disabled = true;
+  try {
+    await api('/api/tiktok/postado-no-site', { execucao: st.atual });
+    await carregarExecucoes();
+    abrirExecucao(st.atual);
+  } catch (err) {
+    $('tt-site-msg').textContent = err.message;
+    $('tt-postei').disabled = false;
+  }
+}
+
+const ttSite = () => ttAtivo() && ttMarcado() && !!st.tt && st.tt.modo === 'site';
+
+/* por que o TikTok direto ainda nao pode publicar; vazio quando pode */
+function pendenciaTikTok() {
+  if (!ttAtivo() || !ttMarcado() || !st.tt || st.tt.modo !== 'direto') return '';
+  if (!contaOk()) return st.conta === 'carregando' || !st.conta ? 'Consultando a conta do TikTok...' : 'Resolva o aviso do TikTok ou mande para o app do celular.';
+  const t = st.tt;
+  if (st.conta.duracao_max && t.duracao && t.duracao > st.conta.duracao_max) return 'O vídeo passa da duração máxima do TikTok.';
+  if (!t.legenda.trim()) return 'Escreva a legenda do TikTok.';
+  if (!t.privacidade) return 'Escolha quem pode ver o vídeo no TikTok.';
+  if (t.divulgacao && !t.sua_marca && !t.conteudo_de_marca) return 'Complete a divulgação de conteúdo comercial.';
+  return '';
+}
+
+function escolhasTikTok() {
+  if (!ttAtivo() || !st.tt) return undefined;
+  if (st.tt.modo !== 'direto') return { modo: 'app' };
+  const { privacidade, legenda, comentario, dueto, costura, divulgacao, sua_marca, conteudo_de_marca, ia } = st.tt;
+  return { modo: 'direto', privacidade, legenda, comentario, dueto, costura, divulgacao, sua_marca, conteudo_de_marca, ia };
+}
+
+function plataformasMarcadas() {
+  // pelo site quem posta e voce, com os botoes da tela do TikTok
+  return ['tiktok', 'youtube'].filter((p) => {
+    const el = $(`pub-${p}`);
+    return el && el.checked && !el.disabled && !(p === 'tiktok' && ttSite());
+  });
+}
+
+function atualizarBotaoPublicar() {
+  const run = st.runs.find((r) => r.nome === st.atual);
+  const escolhidas = plataformasMarcadas();
+  const ocupado = rodando();
+  const pendencia = pendenciaTikTok();
+  $('btn-publicar').disabled = ocupado || !run || !run.tem_video || !escolhidas.length || !!pendencia;
+  $('pub-hint').textContent = ocupado && st.job.tipo === 'publicar' ? 'Publicando...'
+    : ocupado ? 'Espere a geração em andamento terminar.'
+    : !escolhidas.length ? (ttSite() ? 'O TikTok pelo site usa os botões acima.' : 'Escolha onde publicar.') : pendencia;
+}
+
+$('btn-copiar').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('v-legenda').textContent);
+    $('btn-copiar').textContent = 'Copiada';
+  } catch (_) {
+    $('btn-copiar').textContent = 'Não deu para copiar';
+  }
+  setTimeout(() => { $('btn-copiar').textContent = 'Copiar legenda'; }, 1600);
+});
+
+/* ---------- gerar e publicar ---------- */
+
+$('btn-gerar').addEventListener('click', async () => {
+  let tema = $('tema').value;
+  if (tema === OUTRO) {
+    tema = $('tema-livre').value.trim();
+    if (!tema) { $('tema-livre').focus(); return; }
+  }
+  $('btn-gerar').disabled = true;
+  try {
+    const { job } = await api('/api/gerar', { tema });
+    iniciarJob(job);
+  } catch (err) {
+    alert(err.message);
+    $('btn-gerar').disabled = false;
+  }
+});
+
+$('btn-cancelar').addEventListener('click', async () => {
+  $('btn-cancelar').disabled = true;
+  try { await api('/api/cancelar', {}); } catch (err) { alert(err.message); }
+});
+
+$('btn-publicar').addEventListener('click', () => {
+  const run = st.runs.find((r) => r.nome === st.atual);
+  const escolhidas = plataformasMarcadas();
+  if (!run || !escolhidas.length) return;
+  const e = st.estado;
+  const tt = escolhasTikTok();
+  const partes = escolhidas.map((p) => p === 'youtube'
+    ? `publicar no YouTube (${{ public: 'público', unlisted: 'não listado', private: 'privado' }[e.plataformas.youtube.privacidade] || e.plataformas.youtube.privacidade})`
+    : tt && tt.modo === 'direto' ? `publicar no TikTok de ${st.conta.apelido || st.conta.usuario} (quem pode ver: ${PRIVACIDADES[tt.privacidade] || tt.privacidade})`
+    : (tt ? tt.modo === 'app' : e.plataformas.tiktok.modo === 'upload') ? 'enviar para a caixa de entrada do TikTok' : 'publicar no TikTok');
+  $('dlg-texto').textContent = `Vai ${partes.join(' e ')} o vídeo "${run.metadata.titulo_youtube || run.metadata.tema || run.nome}".`
+    + (tt && tt.modo === 'direto' && escolhidas.includes('tiktok') ? ' Depois de publicado, o TikTok pode levar alguns minutos para processar o vídeo.' : '');
+  $('dlg').showModal();
+});
+$('dlg-nao').addEventListener('click', () => $('dlg').close());
+$('dlg-sim').addEventListener('click', async () => {
+  $('dlg').close();
+  $('btn-publicar').disabled = true;
+  try {
+    const escolhidas = plataformasMarcadas();
+    const { job } = await api('/api/publicar', { execucao: st.atual, plataformas: escolhidas,
+      tiktok: escolhidas.includes('tiktok') ? escolhasTikTok() : undefined });
+    iniciarJob(job);
+  } catch (err) {
+    alert(err.message);
+    atualizarBotaoPublicar();
+  }
+});
+
+/* ---------- acompanhamento da execucao ---------- */
+
+function zerarJob(job) {
+  st.job = job;
+  st.linhas = 0;
+  st.log = [];
+  if (job.tipo === 'gerar') {
+    $('log').textContent = '';
+    $('cenas').replaceChildren();
+    $('prog-erro').hidden = true;
+    $('prog-tema').hidden = true;
+  } else {
+    $('pub-log').textContent = '';
+  }
+}
+
+function iniciarJob(job) {
+  zerarJob(job);
+  renderJob(job);
+  acompanhar();
+}
+
+function anexarLog(pre, linhas) {
+  if (!linhas.length) return;
+  const noFim = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
+  pre.textContent += linhas.join('\n') + '\n';
+  if (noFim) pre.scrollTop = pre.scrollHeight;
+}
+
+const FRASES = {
+  0: 'Preparando...',
+  1: 'Escrevendo o roteiro.',
+  2: 'Gerando as imagens das cenas.',
+  3: 'Gravando a narração, com o tempo de cada palavra.',
+  4: 'Montando o vídeo: câmera, legendas, trilha e capa. É a etapa mais demorada.',
+  5: 'Pronto.',
+};
+
+function renderJob(job) {
+  st.job = job;
+  st.log.push(...job.linhas);
+  st.linhas = job.total_linhas;
+  st.base = job.segundos;
+  st.baseEm = performance.now();
+  $('timer').textContent = mmss(job.segundos);
+  const ativo = job.status === 'rodando';
+  $('btn-gerar').disabled = ativo;
+
+  if (job.tipo === 'publicar') {
+    if (st.atual !== job.execucao) abrirExecucao(job.execucao);
+    $('pub-log').hidden = false;
+    anexarLog($('pub-log'), job.linhas);
+    atualizarBotaoPublicar();
+    return;
+  }
+
+  $('card-prog').hidden = false;
+  anexarLog($('log'), job.linhas);
+  $('btn-cancelar').hidden = !ativo;
+  $('btn-cancelar').disabled = false;
+  $('prog-titulo').textContent = {
+    rodando: 'Gerando vídeo', ok: 'Vídeo pronto', erro: 'A geração falhou', cancelado: 'Geração cancelada',
+  }[job.status];
+
+  const temaLinha = st.log.find((l) => l.includes('Tema de hoje:'));
+  if (temaLinha) {
+    $('prog-tema').textContent = temaLinha.trim().replace('Tema de hoje:', 'Tema:');
+    $('prog-tema').hidden = false;
+  }
+
+  const etapa = job.status === 'ok' ? 6 : Math.max(job.etapa, 1);
+  document.querySelectorAll('#steps li').forEach((li, i) => {
+    const n = i + 1;
+    li.className = n < etapa ? 'done'
+      : n === etapa && ativo ? 'active'
+      : n === etapa && job.status !== 'ok' ? 'fail' : '';
+  });
+  const imagens = document.querySelector('#steps li[data-n="2"]');
+  imagens.textContent = job.cenas_total ? `Imagens ${job.cenas_prontas.length}/${job.cenas_total}` : 'Imagens';
+
+  let frase = FRASES[job.status === 'ok' ? 5 : job.etapa] || '';
+  if (job.status === 'cancelado') frase = 'Cancelada. Nada foi publicado.';
+  if (job.status === 'erro') frase = 'Nada foi publicado. O motivo está abaixo e no log completo.';
+  if (ativo && job.etapa === 2 && job.cenas_total) frase = `Gerando as imagens das cenas (${job.cenas_prontas.length} de ${job.cenas_total} prontas).`;
+  $('status-line').textContent = frase;
+
+  const grade = $('cenas');
+  for (let i = grade.children.length; i < job.cenas_total; i++) {
+    grade.append(h('div', { class: 'cena wait' }, h('span', { class: 'n', text: String(i + 1) })));
+  }
+  job.cenas_prontas.forEach((nome, i) => {
+    const cel = grade.children[i];
+    if (!cel || cel.querySelector('img')) return;
+    cel.classList.remove('wait');
+    cel.prepend(h('img', { src: arquivo(job.execucao, `scenes/${nome}`, Date.now() / 1000), alt: `Cena ${i + 1}` }));
+  });
+
+  if (job.status === 'erro') {
+    const ultimas = st.log.filter((l) => l.trim()).slice(-8).join('\n');
+    $('prog-erro').textContent = ultimas || 'O processo terminou com erro.';
+    $('prog-erro').hidden = false;
+  }
+  atualizarBotaoPublicar();
+}
+
+async function acompanhar() {
+  if (st.polling) return;
+  st.polling = true;
+  try {
+    while (true) {
+      const { job } = await api(`/api/job?desde=${st.linhas}`);
+      if (!job) break;
+      if (!st.job || st.job.id !== job.id) {
+        // execucao iniciada em outra aba: recomeca o log do zero
+        zerarJob(job);
+        continue;
+      }
+      renderJob(job);
+      if (job.status !== 'rodando') {
+        await terminarJob(job);
+        break;
+      }
+      await sleep(800);
+    }
+  } catch (err) {
+    $('status-line').textContent = `Perdi a conexão com o painel: ${err.message}. Recarregue a página.`;
+  } finally {
+    st.polling = false;
+  }
+}
+
+async function terminarJob(job) {
+  await carregarExecucoes();
+  if (job.tipo === 'gerar' && job.status === 'ok') {
+    abrirExecucao(job.execucao);
+    $('card-video').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (job.tipo === 'publicar' && st.atual) {
+    abrirExecucao(st.atual);
+  }
+  atualizarBotaoPublicar();
+}
+
+setInterval(() => {
+  if (!rodando()) return;
+  $('timer').textContent = mmss(st.base + (performance.now() - st.baseEm) / 1000);
+}, 500);
+
+/* ---------- videos do horario automatico ---------- */
+
+async function buscarAutomatico(silencioso) {
+  const msg = $('buscar-msg');
+  $('btn-buscar').disabled = true;
+  if (!silencioso) { msg.hidden = false; msg.textContent = 'Buscando os vídeos do horário automático no GitHub...'; }
+  try {
+    const r = await api('/api/github/buscar', {});
+    if (r.novos) await carregarExecucoes();
+    const texto = r.erro || (r.novos ? `${r.novos} vídeo(s) novo(s) do horário automático.`
+      : silencioso ? '' : 'Nenhum vídeo novo no horário automático.');
+    msg.textContent = texto;
+    msg.hidden = !texto;
+    if (r.novos && !rodando()) abrirExecucao(st.runs[0].nome);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.hidden = false;
+  } finally {
+    $('btn-buscar').disabled = false;
+  }
+}
+$('btn-buscar').addEventListener('click', () => buscarAutomatico(false));
+
+/* ---------- inicio ---------- */
+
+(async function iniciar() {
+  try {
+    renderEstado(await api('/api/estado'));
+    await carregarExecucoes();
+    const { job } = await api('/api/job?desde=0');
+    if (job && job.status === 'rodando') {
+      zerarJob(job);
+      renderJob(job);
+      acompanhar();
+    }
+    if (!st.atual && st.runs.length && !(job && job.tipo === 'publicar' && job.status === 'rodando')) {
+      abrirExecucao(st.runs[0].nome);
+    }
+    // sem esperar: a pagina ja funciona enquanto os videos do GitHub chegam
+    if (st.estado.credenciais.github) buscarAutomatico(true);
+  } catch (err) {
+    aviso(`Não consegui falar com o painel: ${err.message}`);
+  }
+})();
+</script>
+</body>
+</html>
