@@ -1,7 +1,27 @@
 # Configuracao do conteudo gerado diariamente.
 
+# "cenas"      -> narracao por cima de imagens que mudam (formato canal dark)
+# "personagem" -> monologo do personagem fixo de assets/character.png
+content_mode: "cenas"
+
 language: "pt-BR"
-tts_voice: "pt-BR-AntonioNeural"   # rode `edge-tts --list-voices` para ver outras opcoes pt-BR
+# Voz nativa pt-BR: para narracao biblica o sotaque nativo importa mais que a
+# naturalidade bruta das vozes multilingues, que puxam sotaque americano.
+# Rode `edge-tts --list-voices` para ver as outras opcoes.
+tts_voice: "pt-BR-AntonioNeural"
+# Velocidade da narracao. A leitura padrao do edge-tts fica arrastada para
+# formato curto: uma aceleracao leve melhora a retencao sem atropelar a fala.
+# Acima de +12% a narracao reverente comeca a soar apressada.
+tts_rate: "+8%"
+
+branding:
+  # Aparece como marca d'agua no video, repetida ao longo do tempo. Serve para
+  # duas coisas: identidade de canal e dificultar que outro perfil baixe o video
+  # e reposte, porque tapar a marca em varios pontos da mais trabalho que vale.
+  handle: "@candeiabiblica"
+  watermark_enabled: true
+  watermark_opacity: 0.35
+  watermark_repeats: 4     # quantas vezes a marca aparece ao longo do video
 
 # Personagem original fixo do canal. A imagem e gerada UMA vez
 # (python -m src.generate_character) e reaproveitada em todo video, pra manter
@@ -16,29 +36,360 @@ character:
     plain neutral warm-colored background, front-facing portrait
   seed: 424242
 
-niche: "esquetes de humor curtas sobre o dia a dia de um brasileiro caseiro, tom de piada/causo de churrasco"
+niche: >
+  historias cristas recontadas como narrativa: passagens dos evangelhos sobre
+  Jesus Cristo, historias do Antigo Testamento e vidas de santos da tradicao
+  catolica. Linguagem simples e respeitosa, com tensao crescente e uma virada
+  que ensina algo no final
+
+# Horarios de publicacao em UTC. O Brasil e UTC-3, entao 09 UTC = 06h, 15 UTC =
+# 12h e 23 UTC = 20h no horario de Brasilia: manha (devocional), almoco e noite.
+# O bot deduz do relogio qual publicacao esta rodando, para cada uma pegar um
+# tema diferente. Precisa casar com os cron em .github/workflows/daily-post.yml.
+posting_hours_utc: [9, 15, 23]
+
+# Usado apenas no content_mode "cenas".
+scenes:
+  # Sufixo de estilo colado em toda imagem de cena. E o que faz as cenas
+  # parecerem do mesmo video em vez de uma colagem de imagens soltas.
+  style: >
+    cinematic biblical epic still, ancient middle eastern setting, dramatic
+    golden light and long shadows, dust in the air, painterly oil painting
+    texture, muted earthy ochre and deep blue palette, reverent mood,
+    vertical composition, no text, no logos
+  seed: 1234          # base do seed (cada cena usa seed + indice); remova para variar sempre
+  gap_seconds: 0.25   # respiro entre a fala de uma cena e a da proxima
 
 video:
   width: 1080
   height: 1920
   fps: 30
-  zoom_effect: true     # leve zoom (Ken Burns) na imagem do personagem, ao inves de imagem parada
+  zoom_effect: true         # movimento de camera (zoom + pan com easing), variando a direcao por cena
+  crossfade_seconds: 0.6    # duracao da transicao entre cenas
+  # Leve realce de cor no video inteiro. A imagem do gerador sai um pouco
+  # lavada, e a correcao faz diferenca visivel no feed. 1.0 desliga.
+  color_boost: 1.12
+
+# Fase do canal. Estrategia de crescimento em duas etapas:
+#  - "crescimento": a conta ainda nao e monetizada, entao nao ha motivo para
+#    passar de 1 minuto (so video acima de 1 minuto rende no Creator Rewards, e
+#    so conta monetizada recebe). Video curto e mais barato de assistir ate o
+#    fim, retencao alta empurra o alcance, e alcance vira seguidor.
+#  - "monetizacao": a conta ja bateu os requisitos, e todo video precisa passar
+#    de 1 minuto para contar.
+# Troque para "monetizacao" quando a conta for aceita no programa.
+fase: "crescimento"
+
+fases:
+  crescimento:
+    # Medido na execucao real com tts_rate +8%: 171 palavras deram 65,4s
+    # contando as pausas entre cenas, ou seja 2,6 palavras por segundo.
+    # 90 a 115 palavras dao de 35 a 44 segundos.
+    min_narration_words: 90
+    max_narration_words: 115
+    min_scenes: 5
+    max_scenes: 8
+    min_duration_seconds: 0       # nao ha minimo nesta fase
+    cta: >
+      A ULTIMA cena fecha pedindo, em uma frase, que a pessoa siga o canal para
+      ouvir a proxima historia. Nesta fase o video existe para trazer
+      seguidor, entao o pedido e direto, mas no tom reverente da narracao.
+  monetizacao:
+    # Calibrado com medicao real: a voz Antonio le 2,42 palavras por segundo no
+    # ritmo padrao, o que dava 64s com 155 palavras. Com tts_rate em +8% a
+    # leitura ficou 8,3% mais rapida (medido: a mesma frase caiu de 7,30s para
+    # 6,74s), entao 155 palavras passariam a dar 59s. O minimo sobe junto.
+    min_narration_words: 168
+    max_narration_words: 220
+    min_scenes: 8
+    max_scenes: 14
+    min_duration_seconds: 60      # abaixo disso nao rende no Creator Rewards
+    cta: >
+      A ULTIMA cena fecha com um convite curto para acompanhar o canal, no
+      maximo uma frase, nascido do assunto da historia. Convide a voltar para a
+      proxima historia.
+
+script:
+  model: "openai/gpt-oss-120b"   # modelo da Groq usado para escrever o roteiro
+
+  # Regras extras coladas no prompt do roteiro. Aqui ficam as travas que este
+  # nicho exige e que nao valeriam para outro tipo de canal.
+  extra_rules: >
+    - Reconte a historia com AS SUAS PROPRIAS PALAVRAS. Nunca cite versiculo
+      literal de traducao moderna da Biblia (NVI, NAA, NTLH e afins sao
+      protegidas por direito autoral, e copia tambem derruba a originalidade
+      exigida pelos programas de monetizacao).
+    - Seja fiel ao que a passagem ou a tradicao conta. Nao invente acontecimento
+      nem doutrina. Em historia de santo, fique no que a tradicao registra.
+    - Tom respeitoso e acolhedor. Nunca ataque, compare ou diminua outra religiao,
+      denominacao ou crenca.
+    - Nas descricoes visuais, prefira ambiente, objeto, paisagem, luz e silhueta
+      vista de longe. Nunca peca rosto de figura sagrada: o gerador erra rosto
+      com frequencia e o resultado fica irreverente. Nao cite parte do corpo
+      como assunto da imagem, nem mesmo maos: mostre a acao pelo objeto ou pelo
+      ambiente (a jarra derramando, e nao as maos derramando).
+
+  # Estilos de abertura, girando um por publicacao. A primeira frase e o que
+  # decide a retencao, e girar entre formatos serve para MEDIR: com um estilo
+  # fixo nao da para saber qual prende mais. O nome de cada um sai no log e no
+  # metadata.json do video, entao depois de umas semanas voce compara a
+  # retencao no YouTube Studio e mantem so os que ganharam.
+  hooks:
+    - name: "pergunta"
+      instruction: >
+        Abra com uma pergunta direta ao espectador que ele nao consiga responder
+        sem assistir ao video inteiro.
+    - name: "meio-da-acao"
+      instruction: >
+        Comece no instante de maior tensao da historia, sem nenhuma apresentacao.
+        O contexto aparece so depois, na segunda ou terceira cena.
+    - name: "detalhe-estranho"
+      instruction: >
+        Abra citando um detalhe concreto e curioso da historia, algo especifico
+        e inesperado que faca a pessoa querer entender de onde aquilo vem.
+    - name: "final-primeiro"
+      instruction: >
+        Abra revelando o resultado final da historia e depois volte para contar
+        como se chegou ate ali.
+
+  # Fora da rotacao: o codigo so le "hooks". Em 16 geracoes de teste, com tres
+  # versoes diferentes da instrucao, este gancho distorceu a passagem com
+  # frequencia (milagre inventado, fome negada, acao trocada, expectativa
+  # fabricada). Ele pede surpresa e o modelo entrega surpresa as custas da
+  # fidelidade. Para reativar, mova de volta para "hooks" e teste de novo,
+  # de preferencia com outro modelo.
+  ganchos_desativados:
+    - name: "contraintuitivo"
+      # Historico: pedir uma afirmacao que "soasse improvavel" fez o modelo
+      # distorcer a passagem em 7 de 10 testes (milagre inventado, fome negada,
+      # acao trocada). A surpresa agora vem de uma quebra de expectativa que o
+      # proprio texto registra, entao os dois lados sao fatos da passagem.
+      instruction: >
+        Abra com uma quebra de expectativa que a propria passagem registra: o
+        que alguem da historia esperava, ou o que parecia obvio, contra o que de
+        fato aconteceu. Os DOIS lados precisam estar no texto biblico ou na
+        tradicao. Exemplo do tipo certo, sobre Davi: "Saul vestiu Davi com a
+        propria armadura para a luta, e Davi tirou tudo antes de sair." Nao
+        invente fato, nao exagere detalhe (tempo, quantidade, o que alguem
+        comeu, bebeu ou sofreu), nao negue o que o texto afirma e nao troque o
+        que a pessoa fez.
+
+  # Padroes narrativos, girando um por publicacao, independente do tema.
+  # A ideia vem de canais que catalogam video por ESTRUTURA e nao por assunto:
+  # o que se repete e da audiencia e o formato da historia, nao o personagem.
+  # Combinando arco x tema x gancho, o mesmo tema volta meses depois contado de
+  # outro jeito, e o nome do arco vai no metadata.json para depois comparar
+  # retencao e manter so os que seguram o espectador.
+  arcs:
+    - name: "queda-e-resgate"
+      instruction: >
+        Estruture como queda e resgate: mostre primeiro o fundo do poco, o mais
+        baixo que a pessoa chegou, e so depois o socorro que veio.
+    - name: "duvida-e-prova"
+      instruction: >
+        Estruture em torno de uma duvida: alguem nao acredita, resiste ou
+        questiona, e a historia caminha ate o momento em que ele nao consegue
+        mais negar o que viu.
+    - name: "obediencia-custosa"
+      instruction: >
+        Estruture como uma ordem dificil: alguem recebe uma instrucao que parece
+        absurda ou humilhante, paga um preco para obedecer, e so entao entende.
+    - name: "ultimo-vira-primeiro"
+      instruction: >
+        Estruture como inversao: quem era ignorado, desprezado ou considerado o
+        menos provavel e exatamente quem e escolhido no final.
+    - name: "perda-e-restauracao"
+      instruction: >
+        Estruture como perda seguida de restauracao: mostre o que foi tirado, o
+        tempo de vazio, e o que voltou diferente do que era antes.
+    - name: "encontro-que-muda-tudo"
+      instruction: >
+        Estruture em torno de um unico encontro: a pessoa antes, o encontro, e a
+        pessoa depois. O contraste entre o antes e o depois e o coracao do video.
+    - name: "promessa-que-demora"
+      instruction: >
+        Estruture em torno da espera: a promessa vem cedo e demora anos para se
+        cumprir. Mostre o peso do tempo passando e a duvida no meio do caminho,
+        antes do cumprimento.
+
+  # Um tema por publicacao, girando pela lista. Sem isso o modelo repetiria
+  # sempre as historias mais famosas, e as tres execucoes do mesmo dia sairiam
+  # iguais. Deterministico e sem estado entre execucoes.
+  # A lista precisa ser grande: com 3 videos por dia, 30 temas repetem em 10
+  # dias. Os 96 abaixo dao mais de um mes sem repetir.
+  topics:
+    # --- Jesus: infancia e inicio do ministerio ---
+    - "O nascimento em Belem, sem lugar na hospedaria"
+    - "Os pastores avisados pelos anjos no campo"
+    - "Os magos seguindo a estrela do oriente"
+    - "A fuga para o Egito no meio da noite"
+    - "Jesus perdido no templo aos doze anos"
+    - "O batismo no rio Jordao"
+    - "As quarenta noites de tentacao no deserto"
+    - "O chamado dos pescadores para deixarem as redes"
+    - "As bodas de Cana, quando a agua virou vinho"
+    - "A pesca milagrosa depois da noite inteira sem nada"
+    # --- Jesus: milagres ---
+    - "A tempestade acalmada no meio do mar"
+    - "Jesus andando sobre as aguas e Pedro afundando"
+    - "A multiplicacao dos paes e dos peixes"
+    - "O paralitico descido pelo buraco do telhado"
+    - "O cego de Jerico que nao parou de gritar"
+    - "Os dez leprosos e o unico que voltou para agradecer"
+    - "A mulher doente que tocou a barra do manto na multidao"
+    - "A filha de Jairo, quando todos ja choravam"
+    - "Lazaro chamado de volta do tumulo"
+    - "O servo do centurio curado de longe"
+    - "A sogra de Pedro curada da febre"
+    - "O homem com a mao atrofiada curado no sabado"
+    # --- Jesus: encontros ---
+    - "Zaqueu subindo na arvore para ver de longe"
+    - "A samaritana e a conversa no poco ao meio-dia"
+    - "A mulher acusada de adulterio e as pedras no chao"
+    - "Nicodemos procurando Jesus de madrugada"
+    - "Maria e Marta recebendo Jesus em Betania"
+    - "O jovem rico que nao conseguiu se desfazer do que tinha"
+    - "Mateus, o cobrador de impostos, chamado da mesa"
+    - "A viuva de Naim e o filho unico no caminho do enterro"
+    # --- Jesus: parabolas ---
+    - "O bom samaritano parando na estrada"
+    - "O filho prodigo voltando para casa"
+    - "O pastor que deixa noventa e nove para buscar uma ovelha"
+    - "O semeador e os quatro tipos de terreno"
+    - "O grao de mostarda que virou arvore"
+    - "As dez virgens e as lampadas sem azeite"
+    - "Os talentos confiados aos tres servos"
+    - "A viuva que deu as duas ultimas moedas"
+    - "O rico e o pobre Lazaro na porta"
+    - "O fariseu e o publicano orando no templo"
+    - "O servo perdoado pelo rei que nao perdoou o companheiro"
+    - "O tesouro escondido no campo"
+    # --- Jesus: paixao e ressurreicao ---
+    - "A entrada em Jerusalem sobre um jumento"
+    - "A ultima ceia e o pao repartido"
+    - "O lava-pes que ninguem entendeu na hora"
+    - "A agonia no jardim de Getsemani"
+    - "A traicao selada com um beijo"
+    - "Pedro negando tres vezes antes do galo cantar"
+    - "Jesus calado diante de Pilatos"
+    - "Simao ajudando a carregar a cruz"
+    - "O bom ladrao ao lado na cruz"
+    - "A escuridao do meio-dia no calvario"
+    - "A pedra encontrada rolada na manha de domingo"
+    - "Maria Madalena confundindo Jesus com o jardineiro"
+    - "Os discipulos de Emaus reconhecendo no partir do pao"
+    - "Tomé, o apóstolo que precisou ver para acreditar"
+    - "O peixe assado na praia e o perdao de Pedro"
+    - "A ascensao diante dos discipulos"
+    - "Pentecostes e as linguas de fogo"
+    # --- Antigo Testamento ---
+    - "Noe construindo a arca diante do deboche de todos"
+    - "A torre de Babel e a confusao das linguas"
+    - "Abraao subindo o monte com Isaque"
+    - "Jaco lutando a noite inteira com o anjo"
+    - "Jose vendido pelos irmaos e sua ascensao no Egito"
+    - "Moises e a sarca que ardia sem se consumir"
+    - "Moises e a travessia do Mar Vermelho"
+    - "As muralhas de Jerico caindo apos sete voltas"
+    - "Gideao vencendo com apenas trezentos homens"
+    - "Sansao perdendo e reencontrando sua forca"
+    - "Rute escolhendo ficar com Noemi"
+    - "Davi enfrentando Golias com uma funda"
+    - "Davi poupando a vida de Saul na caverna"
+    - "Salomao julgando a disputa entre duas maes"
+    - "Elias desafiando os profetas de Baal no Carmelo"
+    - "Elias alimentado pelos corvos no deserto"
+    - "Naamã, o comandante sírio, curado depois de sete banhos no Jordão"
+    - "Jonas engolido pelo grande peixe"
+    - "Os tres jovens na fornalha ardente"
+    - "Daniel na cova dos leoes"
+    - "Ester arriscando a vida diante do rei"
+    - "Jó perdendo tudo e permanecendo firme"
+    - "Neemias reconstruindo os muros sob ameaca"
+    - "A viuva de Sarepta e o pote de farinha que nao acabava"
+    # --- Santos e tradicao catolica ---
+    - "Sao Francisco de Assis renunciando a riqueza do pai"
+    - "Sao Francisco e o lobo de Gubbio"
+    - "Santa Clara deixando tudo para seguir Francisco"
+    - "Santo Antonio e o sermao aos peixes"
+    - "Sao Jose, o pai que confiou sem entender"
+    - "Nossa Senhora de Fatima e os tres pastorinhos"
+    - "Nossa Senhora de Lourdes e a menina Bernadette"
+    - "Nossa Senhora Aparecida encontrada no rio Paraiba"
+    - "Nossa Senhora de Guadalupe e as rosas no manto de Juan Diego"
+    - "Santa Teresinha e o caminho das coisas pequenas"
+    - "Santa Rita de Cassia e o perdao impossivel"
+    - "Sao Judas Tadeu, o santo das causas perdidas"
+    - "Sao Sebastiao amarrado e fiel"
+    - "Padre Pio e as marcas nas maos"
+    - "Madre Teresa nas ruas de Calcuta"
+    - "Santo Agostinho e a conversao no jardim"
+    - "Sao Paulo, de perseguidor a apostolo"
+    - "Sao Pedro, o pescador que virou pedra"
+    - "Frei Galvao, o primeiro santo brasileiro"
+    - "Santa Dulce dos Pobres e o hospital que nasceu de nada"
 
 captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
+  bottom_margin: 420    # distancia da legenda ate a base, em px (a interface do TikTok cobre o rodape)
+
+# Capa do video (so o YouTube aceita capa customizada; o TikTok usa um quadro
+# do proprio video). Exige canal verificado por telefone: se nao estiver, o bot
+# avisa e segue, sem perder a publicacao.
+thumbnail:
+  enabled: true
+  max_lines: 3    # em quantas linhas o texto de impacto pode ser quebrado
+
+sfx:
+  laugh_enabled: false     # risada de grupo no fim (assets/laughs/*.mp3). Combina com humor, nao com historia seria
+  laugh_gap_seconds: 0.4   # pausa entre o fim da narracao e o inicio da risada
+  music_enabled: true      # trilha de fundo sorteada de assets/music/*.mp3 (pasta vazia = sem musica)
+  music_volume: 0.10       # volume da trilha por baixo da narracao (0 a 1)
 
 tiktok:
   enabled: true
   privacy_level: "SELF_ONLY"  # apps nao auditados so podem postar como SELF_ONLY (rascunho privado)
+  # "upload": o video cai na caixa de entrada do app e VOCE finaliza a postagem
+  #   no celular, escolhendo legenda, som e privacidade. Como quem publica e
+  #   voce, sai publico mesmo com o app ainda nao auditado. Exige o escopo
+  #   video.upload. Limite: 5 envios pendentes em 24h, entao finalize os
+  #   rascunhos todo dia, senao a partir do segundo dia o envio falha.
+  # "direct": o bot publica sozinho, mas app nao auditado so posta privado
+  #   (SELF_ONLY). Exige video.publish.
+  # Vale para o horario automatico. O TikTok pede que a pessoa confirme cada
+  # post, entao publicar direto e com a tela do painel (painel_direto).
+  mode: "upload"
+  # O painel mostra a tela de publicar direto no perfil, com tudo que a
+  # revisao do app exige: conta que vai receber, quem pode ver (sem opcao
+  # pre-escolhida), comentario/dueto/costura, divulgacao comercial, rotulo de
+  # conteudo gerado por IA e o aviso da Confirmacao de Uso de Musica.
+  # Precisa do Direct Post ligado no app do TikTok for Developers e da conta
+  # reconectada depois disso (o escopo video.publish entra no pedido).
+  painel_direto: true
+  # true depois que o TikTok aprovar o app: o painel passa a abrir na
+  # publicacao direta em vez de mandar para o app do celular.
+  app_aprovado: false
+  # false: o horario automatico do GitHub nao manda nada para o TikTok. O
+  # video fica no painel (que baixa os videos do automatico) e voce posta de
+  # la. Com true, cada horario manda para a caixa de entrada do celular.
+  automatico: false
 
 youtube:
   enabled: true
   privacy_status: "public"    # public | unlisted | private
-  category_id: "23"           # 23 = Comedy. Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
+  category_id: "22"           # 22 = People & Blogs (nao existe categoria de religiao). Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
   made_for_kids: false
 
+# Cada video sai com no maximo hashtags_max hashtags: as fixas abaixo, que
+# sao as de maior volume do nicho cristao em portugues, e a vaga que sobra
+# fica com a do video (personagem ou tema da historia, gerada pelo LLM), que
+# e a que leva quem procura aquela historia. As fixas vem primeiro porque o
+# YouTube exibe as tres primeiras ao lado do titulo.
+# Nao use #fyp, #viral ou #foryou: nao dizem do que o video trata, e o
+# YouTube avisa que exagerar em tag pode tirar o video da busca.
+# Repetidas e acentos sao limpos automaticamente (ver src/hashtags.py).
+hashtags_max: 4
 hashtags_extra:
-  - "#humor"
-  - "#causo"
-  - "#churrasco"
-  - "#comediabr"
+  - "#Jesus"
+  - "#Deus"
+  - "#Biblia"
