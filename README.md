@@ -141,6 +141,14 @@ horas). Com três vídeos por dia, finalize os rascunhos todo dia para não trav
 próximos envios. A legenda sugerida, já com as hashtags, aparece no log da execução e
 no campo `legenda_tiktok` do `metadata.json`.
 
+**Postar pelo site, sem celular.** Com `tiktok.automatico: false` (o padrão), o horário
+automático publica só no YouTube, e o vídeo fica no painel, que baixa sozinho os vídeos
+gerados no GitHub. No TikTok, a opção **Postar pelo site (PC)** copia a legenda, abre a
+página de upload do TikTok e abre a pasta com o vídeo já selecionado. Na página, você
+arrasta o arquivo, cola a legenda, escolhe quem pode ver e clica em Post, e depois marca
+"Já postei" no painel. O painel não mexe no site do TikTok: preencher a página por
+programa é automação proibida pelos termos, mesmo com o clique final sendo seu.
+
 **Publicar direto pelo painel.** Com `tiktok.painel_direto: true`, o painel tem a tela de
 publicar direto no perfil que a revisão do TikTok exige:
 
@@ -155,8 +163,8 @@ publicar direto no perfil que a revisão do TikTok exige:
   TikTok pode levar alguns minutos para processar o vídeo
 
 As mesmas regras são conferidas de novo no servidor do painel, com a conta consultada na
-hora. O TikTok pede que a pessoa confirme cada post, então o horário automático continua
-no modo `upload` e a publicação direta é a do painel.
+hora. O TikTok pede que a pessoa confirme cada post, então a publicação direta é sempre a do
+painel, nunca a do horário automático.
 
 **Para sair público direto,** ligue o **Direct Post** no Content Posting API do app,
 reconecte a conta (passo 6, que passa a pedir `video.publish`) e envie o app para revisão
@@ -370,6 +378,9 @@ navegador e mostra:
   TikTok, dá para mandar para o app do celular ou publicar direto no perfil, pela tela que
   a revisão do TikTok exige (veja [Publicação no TikTok](#publicação-no-tiktok))
 + **Histórico:** todos os vídeos gerados, com o que já saiu em cada plataforma
++ **Vídeos do automático:** com `GH_PAT` no `.env`, o painel baixa ao abrir os vídeos que
+  o horário automático gerou no GitHub (e o registro do que já saiu no YouTube), para
+  você postar no TikTok a partir dele
 
 O painel roda só na sua máquina (endereço `127.0.0.1`, inacessível de fora) e usa as
 chaves do `.env`, que nunca aparecem na página. A geração é o mesmo `main.py` do GitHub

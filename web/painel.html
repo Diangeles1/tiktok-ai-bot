@@ -243,6 +243,10 @@
   .nota code { font-size: 12.5px; overflow-wrap: anywhere; }
   .declara { font-size: 13px; color: var(--muted); margin: 0; }
   button.mini { padding: 4px 10px; font-size: 12.5px; }
+  ol.passos { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .card-head h2 { margin: 0; }
+  #buscar-msg { margin: -4px 0 10px; }
 
   dialog {
     width: min(440px, calc(100% - 32px)); padding: 22px; border: 1px solid var(--border);
@@ -337,7 +341,11 @@
 
   <aside class="col">
     <section class="card">
-      <h2>Vídeos gerados</h2>
+      <div class="card-head">
+        <h2>Vídeos gerados</h2>
+        <button class="mini" id="btn-buscar" hidden>Buscar do automático</button>
+      </div>
+      <p class="hint" id="buscar-msg" hidden></p>
       <ul class="hist" id="hist"></ul>
       <p class="hint" id="hist-vazio" hidden>Nenhum vídeo gerado ainda.</p>
     </section>
@@ -421,6 +429,8 @@ function renderEstado(e) {
       h('span', { class: 'dot' }), rotulo));
   }
 
+  $('btn-buscar').hidden = !e.credenciais.github;
+
   $('avisos').replaceChildren();
   if (!e.env_encontrado) aviso('Arquivo .env não encontrado. Sem as chaves, o painel não consegue gerar nem publicar.');
   else if (!e.credenciais.groq) aviso('Falta a GROQ_API_KEY no .env. Sem ela o roteiro não é gerado.');
@@ -470,7 +480,8 @@ function renderHistorico() {
     const badges = ['youtube', 'tiktok']
       .filter((p) => (ultimaTentativa(run.publicacao, p) || {}).ok)
       .map((p) => h('span', { class: 'badge', text: NOMES[p] }));
-    const detalhe = [quando(run.modificado), m.duracao_segundos ? `${String(m.duracao_segundos).replace('.', ',')}s` : null]
+    const detalhe = [quando(run.modificado), m.duracao_segundos ? `${String(m.duracao_segundos).replace('.', ',')}s` : null,
+      run.automatico ? 'automático' : null]
       .filter(Boolean).join(' · ');
     lista.append(h('li', {}, h('button', {
       class: run.nome === st.atual ? 'sel' : null,
@@ -502,7 +513,7 @@ function abrirExecucao(nome) {
   $('dl-capa').href = arquivo(nome, 'thumbnail.jpg', run.modificado);
   $('dl-capa').hidden = !run.tem_capa;
 
-  $('v-quando').textContent = `Gerado em ${quando(run.modificado)}`;
+  $('v-quando').textContent = `Gerado em ${quando(run.modificado)}${run.automatico ? ' pelo horário automático' : ''}`;
   $('v-titulo').textContent = m.titulo_youtube || m.tema || nome;
   const itens = [
     ['Tema', m.tema],
@@ -535,14 +546,19 @@ function renderPublicacao(run) {
     let pode = cfg.ativo && cfg.credenciais;
     if (!cfg.ativo) det = 'Desativado no config.yaml.';
     else if (!cfg.credenciais) det = 'Faltam as chaves no .env.';
+    else if (p === 'tiktok' && cfg.painel_direto) det = 'Pelo site (PC), direto no perfil ou pelo app do celular.';
     else if (p === 'tiktok') det = cfg.modo === 'upload'
       ? 'Vai para a caixa de entrada do app. Você finaliza a postagem no celular.'
       : 'Publica direto no perfil.';
     else det = `Sai como ${{ public: 'público', unlisted: 'não listado', private: 'privado' }[cfg.privacidade] || cfg.privacidade}.`;
     if (feito && pode) det = `Já publicado. Marque só se quiser publicar de novo. ${det}`;
+    // videos baixados antes de o automatico mandar o publicacao.json: nao da
+    // para saber se o YouTube ja saiu, entao nao marca para nao duplicar
+    const semRegistro = run.automatico && p === 'youtube' && !((run.publicacao || {})[p] || []).length;
+    if (semRegistro && pode) det = 'Veio do horário automático, que já publica no YouTube. Confira no YouTube Studio antes de marcar.';
     const input = h('input', { type: 'checkbox', id: `pub-${p}`, value: p, disabled: !pode,
       onchange: () => { if (p === 'tiktok') renderTikTok(); atualizarBotaoPublicar(); } });
-    input.checked = pode && !feito;
+    input.checked = pode && !feito && !semRegistro;
     caixa.append(h('label', { class: `opcao${pode ? '' : ' off'}`, for: `pub-${p}` }, input,
       h('span', {}, h('span', { class: 'nome', text: p === 'youtube' ? 'YouTube Shorts' : 'TikTok' }), h('span', { class: 'det', id: `det-${p}`, text: det }))));
     if (p === 'tiktok') caixa.append(h('div', { class: 'tt', id: 'tt' }));
@@ -557,7 +573,9 @@ function renderPublicacao(run) {
       res.append(h('div', { class: 'res ok' }, `Publicado no YouTube em ${quandoIso(t.quando)}. `,
         h('a', { href: t.url, target: '_blank', rel: 'noopener', text: 'Abrir o Short' })));
     } else if (t.ok) {
-      res.append(h('div', { class: 'res ok', text: t.modo === 'upload'
+      res.append(h('div', { class: 'res ok', text: t.modo === 'site'
+        ? `Postado pelo site do TikTok em ${quandoIso(t.quando)}.`
+        : t.modo === 'upload'
         ? `Enviado para a caixa de entrada do TikTok em ${quandoIso(t.quando)}. Abra o app no celular para finalizar a postagem.`
         : `Publicado no TikTok em ${quandoIso(t.quando)}${t.privacidade ? ` (quem pode ver: ${PRIVACIDADES[t.privacidade] || t.privacidade})` : ''}. `
           + 'Pode levar alguns minutos para o TikTok processar o vídeo e ele aparecer no perfil.' }));
@@ -598,7 +616,8 @@ function iniciarTikTok(run) {
     const m = run.metadata;
     st.tt = {
       run: run.nome,
-      modo: st.estado.plataformas.tiktok.app_aprovado ? 'direto' : 'app',
+      // ate o app ser aprovado, o jeito de sair publico sem celular e o site
+      modo: st.estado.plataformas.tiktok.app_aprovado ? 'direto' : 'site',
       legenda: m.legenda_tiktok || [m.titulo_youtube, ...(m.hashtags || [])].filter(Boolean).join(' '),
       duracao: m.duracao_segundos || null,
       privacidade: '',
@@ -658,7 +677,7 @@ function renderTikTok() {
   const t = st.tt;
 
   const modos = h('div', { class: 'modos', role: 'radiogroup', 'aria-label': 'Como publicar no TikTok' });
-  for (const [valor, rotulo] of [['direto', 'Publicar direto no perfil'], ['app', 'Mandar para o app do celular']]) {
+  for (const [valor, rotulo] of [['site', 'Postar pelo site (PC)'], ['direto', 'Publicar direto no perfil'], ['app', 'Mandar para o app do celular']]) {
     const input = h('input', { type: 'radio', name: 'tt-modo', id: `tt-modo-${valor}`, value: valor,
       onchange: () => mudarTT('modo', valor) });
     input.checked = t.modo === valor;
@@ -668,6 +687,22 @@ function renderTikTok() {
 
   if (t.modo === 'app') {
     box.append(h('p', { class: 'hint', text: 'Vai para a caixa de entrada do app. Você finaliza a postagem no celular, escolhendo quem pode ver e colando a legenda.' }));
+    return;
+  }
+
+  if (t.modo === 'site') {
+    // o painel prepara tudo fora do TikTok; dentro do site quem mexe e voce,
+    // que e o que o TikTok permite enquanto o app nao e aprovado
+    box.append(h('ol', { class: 'passos' },
+      h('li', { text: 'Clique em "Preparar": a legenda é copiada, a página de upload do TikTok abre e a pasta do vídeo abre com o arquivo selecionado.' }),
+      h('li', { text: 'Arraste o vídeo da pasta para a página do TikTok.' }),
+      h('li', { text: 'Clique na descrição e aperte Ctrl+V.' }),
+      h('li', { text: 'Em "Who can watch this video", escolha Everyone e clique em Post.' }),
+      h('li', { text: 'Volte aqui e clique em "Já postei", para o painel lembrar.' })),
+      h('div', { class: 'row' },
+        h('button', { class: 'primary', id: 'tt-preparar', onclick: prepararSite, text: 'Preparar' }),
+        h('button', { id: 'tt-postei', onclick: marcarPostado, text: 'Já postei' }),
+        h('span', { class: 'hint', id: 'tt-site-msg', 'aria-live': 'polite' })));
     return;
   }
 
@@ -754,6 +789,37 @@ function renderTikTok() {
   box.append(declara);
 }
 
+async function prepararSite() {
+  const msg = $('tt-site-msg');
+  let copiou = false;
+  // a copia vem antes de abrir a aba: com o foco na aba nova o navegador
+  // recusa escrever na area de transferencia
+  try { await navigator.clipboard.writeText(st.tt.legenda); copiou = true; } catch (_) { /* avisa abaixo */ }
+  window.open('https://www.tiktok.com/tiktokstudio/upload', '_blank', 'noopener');
+  try {
+    await api('/api/mostrar-video', { execucao: st.atual });
+  } catch (err) {
+    msg.textContent = `Não consegui abrir a pasta: ${err.message}`;
+    return;
+  }
+  msg.textContent = copiou ? 'Legenda copiada. Agora é arrastar o vídeo para a página do TikTok.'
+    : 'A legenda não foi copiada: use o botão "Copiar legenda" acima.';
+}
+
+async function marcarPostado() {
+  $('tt-postei').disabled = true;
+  try {
+    await api('/api/tiktok/postado-no-site', { execucao: st.atual });
+    await carregarExecucoes();
+    abrirExecucao(st.atual);
+  } catch (err) {
+    $('tt-site-msg').textContent = err.message;
+    $('tt-postei').disabled = false;
+  }
+}
+
+const ttSite = () => ttAtivo() && ttMarcado() && !!st.tt && st.tt.modo === 'site';
+
 /* por que o TikTok direto ainda nao pode publicar; vazio quando pode */
 function pendenciaTikTok() {
   if (!ttAtivo() || !ttMarcado() || !st.tt || st.tt.modo !== 'direto') return '';
@@ -774,7 +840,11 @@ function escolhasTikTok() {
 }
 
 function plataformasMarcadas() {
-  return ['tiktok', 'youtube'].filter((p) => { const el = $(`pub-${p}`); return el && el.checked && !el.disabled; });
+  // pelo site quem posta e voce, com os botoes da tela do TikTok
+  return ['tiktok', 'youtube'].filter((p) => {
+    const el = $(`pub-${p}`);
+    return el && el.checked && !el.disabled && !(p === 'tiktok' && ttSite());
+  });
 }
 
 function atualizarBotaoPublicar() {
@@ -785,7 +855,7 @@ function atualizarBotaoPublicar() {
   $('btn-publicar').disabled = ocupado || !run || !run.tem_video || !escolhidas.length || !!pendencia;
   $('pub-hint').textContent = ocupado && st.job.tipo === 'publicar' ? 'Publicando...'
     : ocupado ? 'Espere a geração em andamento terminar.'
-    : !escolhidas.length ? 'Escolha onde publicar.' : pendencia;
+    : !escolhidas.length ? (ttSite() ? 'O TikTok pelo site usa os botões acima.' : 'Escolha onde publicar.') : pendencia;
 }
 
 $('btn-copiar').addEventListener('click', async () => {
@@ -997,6 +1067,29 @@ setInterval(() => {
   $('timer').textContent = mmss(st.base + (performance.now() - st.baseEm) / 1000);
 }, 500);
 
+/* ---------- videos do horario automatico ---------- */
+
+async function buscarAutomatico(silencioso) {
+  const msg = $('buscar-msg');
+  $('btn-buscar').disabled = true;
+  if (!silencioso) { msg.hidden = false; msg.textContent = 'Buscando os vídeos do horário automático no GitHub...'; }
+  try {
+    const r = await api('/api/github/buscar', {});
+    if (r.novos) await carregarExecucoes();
+    const texto = r.erro || (r.novos ? `${r.novos} vídeo(s) novo(s) do horário automático.`
+      : silencioso ? '' : 'Nenhum vídeo novo no horário automático.');
+    msg.textContent = texto;
+    msg.hidden = !texto;
+    if (r.novos && !rodando()) abrirExecucao(st.runs[0].nome);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.hidden = false;
+  } finally {
+    $('btn-buscar').disabled = false;
+  }
+}
+$('btn-buscar').addEventListener('click', () => buscarAutomatico(false));
+
 /* ---------- inicio ---------- */
 
 (async function iniciar() {
@@ -1012,6 +1105,8 @@ setInterval(() => {
     if (!st.atual && st.runs.length && !(job && job.tipo === 'publicar' && job.status === 'rodando')) {
       abrirExecucao(st.runs[0].nome);
     }
+    // sem esperar: a pagina ja funciona enquanto os videos do GitHub chegam
+    if (st.estado.credenciais.github) buscarAutomatico(true);
   } catch (err) {
     aviso(`Não consegui falar com o painel: ${err.message}`);
   }

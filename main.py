@@ -256,7 +256,14 @@ def main() -> None:
         print(f"  Titulo YouTube: {youtube_title} ({len(youtube_title)} caracteres)")
         return
 
-    publish_run(run_dir, cfg)
+    # no horario automatico so entram as plataformas com automatico: true. O
+    # TikTok fica de fora enquanto o app nao for aprovado: sai pelo painel
+    auto = [p for p in REQUIRED_ENV if cfg.get(p, {}).get("automatico", True)]
+    results = publish_run(run_dir, cfg, auto)
+    # sem isso a execucao termina verde com a publicacao falhando, e ninguem
+    # fica sabendo ate olhar o canal
+    if any(not outcome["ok"] for outcome in results.values()):
+        sys.exit(1)
 
 
 def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> dict:
