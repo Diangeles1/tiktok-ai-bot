@@ -364,19 +364,16 @@ youtube:
   category_id: "22"           # 22 = People & Blogs (nao existe categoria de religiao). Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
   made_for_kids: false
 
-# Hashtags fixas do canal, somadas as 4 que o LLM gera para cada video.
-# As do video entram primeiro, porque sao as tres primeiras que o YouTube
-# exibe ao lado do titulo e elas descrevem melhor o conteudo do dia.
-# Escolhidas por especificidade, nao por volume: nao use #fyp, #viral ou
-# #foryou. Em pool de bilhoes de posts a chance de aparecer e nula, e o
+# Cada video sai com no maximo hashtags_max hashtags: as fixas abaixo, que
+# sao as de maior volume do nicho cristao em portugues, e a vaga que sobra
+# fica com a do video (personagem ou tema da historia, gerada pelo LLM), que
+# e a que leva quem procura aquela historia. As fixas vem primeiro porque o
+# YouTube exibe as tres primeiras ao lado do titulo.
+# Nao use #fyp, #viral ou #foryou: nao dizem do que o video trata, e o
 # YouTube avisa que exagerar em tag pode tirar o video da busca.
 # Repetidas e acentos sao limpos automaticamente (ver src/hashtags.py).
+hashtags_max: 4
 hashtags_extra:
   - "#Jesus"
-  - "#Biblia"
-  - "#Fe"
-  - "#Evangelho"
-  - "#Catolico"
-  - "#HistoriasBiblicas"
   - "#Deus"
-  - "#Oracao"
+  - "#Biblia"

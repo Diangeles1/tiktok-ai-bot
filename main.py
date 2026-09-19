@@ -207,8 +207,10 @@ def main() -> None:
         )
         print(f"  Capa: \"{cover_text}\"")
 
-    # as do video vem primeiro: sao elas que o YouTube exibe ao lado do titulo
-    tags = hashtags.build(script.get("hashtags", []), cfg.get("hashtags_extra", []))
+    # as fixas do canal vem primeiro para nunca ficarem de fora do limite; a do
+    # video preenche o que sobra (se repetir uma fixa, entra a seguinte)
+    tags = hashtags.build(cfg.get("hashtags_extra", []), script.get("hashtags", []),
+                          limit=cfg.get("hashtags_max", 4))
     tag_line = " ".join(tags)
 
     # o TikTok junta tudo numa legenda so. No YouTube o titulo tem 100

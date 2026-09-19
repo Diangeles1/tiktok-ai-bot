@@ -3,8 +3,8 @@
 Duas coisas que o LLM erra sozinho e custam alcance: devolve hashtag com
 acento, que fragmenta a busca porque quem procura digita sem, e repete tag que
 ja esta na lista fixa em outra grafia (#Fe e #fe contam como a mesma, mas
-ocupam duas vagas). O YouTube ainda mostra apenas as tres primeiras ao lado do
-titulo, entao vaga desperdicada e alcance perdido."""
+ocupam duas vagas). Com poucas vagas (o canal usa 4), cada repetida e uma
+hashtag a menos."""
 import re
 import unicodedata
 
@@ -21,9 +21,8 @@ def normalize(raw: str) -> str | None:
 def build(*groups: list[str], limit: int = 12) -> list[str]:
     """Junta os grupos na ordem recebida, tirando repetidas e cortando no limite.
 
-    A ordem importa: as primeiras sao as que o YouTube exibe, entao passe
-    primeiro as especificas do video, que descrevem melhor o conteudo que as
-    tags genericas do canal."""
+    A ordem importa: o corte do limite tira as ultimas, e as tres primeiras sao
+    as que o YouTube exibe ao lado do titulo."""
     seen: set[str] = set()
     result: list[str] = []
 
