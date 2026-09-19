@@ -369,6 +369,10 @@ tiktok:
   # true depois que o TikTok aprovar o app: o painel passa a abrir na
   # publicacao direta em vez de mandar para o app do celular.
   app_aprovado: false
+  # false: o horario automatico do GitHub nao manda nada para o TikTok. O
+  # video fica no painel (que baixa os videos do automatico) e voce posta de
+  # la. Com true, cada horario manda para a caixa de entrada do celular.
+  automatico: false
 
 youtube:
   enabled: true

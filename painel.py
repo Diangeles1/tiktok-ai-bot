@@ -17,11 +17,13 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import threading
 import time
 import webbrowser
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -37,6 +39,11 @@ PAGE_PATH = os.path.join(ROOT, "web", "painel.html")
 BRASILIA_UTC_OFFSET = -3
 
 RUN_NAME_RE = re.compile(r"^[\w.-]+$")
+# pasta dos videos baixados do horario automatico (artifact do GitHub Actions)
+AUTO_PREFIX = "auto_"
+AUTO_FILES = ("final.mp4", "thumbnail.jpg", "metadata.json", "publicacao.json")
+AUTO_MAX_BYTES = 300 * 1024 * 1024
+GITHUB_API = "https://api.github.com"
 STEP_RE = re.compile(r"^\[(\d)/\d\]")
 SCENE_RE = re.compile(r"\[cena \d+/(\d+)\]")
 MAX_BODY_BYTES = 64 * 1024
@@ -91,6 +98,7 @@ def run_summary(name: str) -> dict:
         "publicacao": read_json(os.path.join(path, "publicacao.json")) or {},
         "tem_video": os.path.exists(video),
         "tem_capa": os.path.exists(os.path.join(path, "thumbnail.jpg")),
+        "automatico": name.startswith(AUTO_PREFIX),
     }
 
 
@@ -101,6 +109,98 @@ def list_runs() -> list[dict]:
             if RUN_NAME_RE.match(name)
             and os.path.isfile(os.path.join(OUTPUT_DIR, name, "metadata.json"))]
     return sorted(runs, key=lambda r: r["modificado"], reverse=True)
+
+
+def append_history(path: str, platform: str, outcome: dict) -> None:
+    """Acrescenta uma tentativa ao publicacao.json, no mesmo formato do main.py."""
+    history_path = os.path.join(path, "publicacao.json")
+    history = read_json(history_path) or {}
+    history.setdefault(platform, []).append(outcome)
+    tmp = history_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, history_path)
+
+
+def _iso_epoch(value: str | None) -> float | None:
+    try:
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except (AttributeError, ValueError):
+        return None
+
+
+def fetch_github_videos(env: dict, limit: int = 12) -> dict:
+    """Baixa para output/auto_<execucao> os videos que o horario automatico
+    gerou no GitHub Actions e ainda nao estao aqui.
+
+    Le so a lista de artifacts e o zip de cada um; do zip extrai apenas os
+    arquivos esperados, pelo nome, e nunca um caminho vindo de dentro dele."""
+    token, repo = env.get("GH_PAT"), env.get("GH_REPOSITORY")
+    if not token or not repo:
+        return {"novos": 0, "erro": "Faltam GH_PAT e GH_REPOSITORY no .env."}
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+               "X-GitHub-Api-Version": "2022-11-28"}
+    try:
+        resp = requests.get(f"{GITHUB_API}/repos/{repo}/actions/artifacts",
+                            headers=headers, params={"per_page": 50}, timeout=30)
+        resp.raise_for_status()
+        artifacts = resp.json().get("artifacts", [])
+    except (requests.RequestException, ValueError) as exc:
+        return {"novos": 0, "erro": f"Nao consegui falar com o GitHub: {exc}"}
+
+    wanted = [a for a in artifacts
+              if a.get("name", "").startswith("video-") and not a.get("expired")
+              and a.get("size_in_bytes", 0) < AUTO_MAX_BYTES][:limit]
+    new, errors = 0, []
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    for art in wanted:
+        run_id = str((art.get("workflow_run") or {}).get("id") or art["id"])
+        dest = os.path.join(OUTPUT_DIR, f"{AUTO_PREFIX}{run_id}")
+        if os.path.isdir(dest):
+            continue
+        # o "~" fica fora do RUN_NAME_RE: um download pela metade nunca aparece
+        # na lista de videos
+        tmp_zip = os.path.join(OUTPUT_DIR, f"~{AUTO_PREFIX}{run_id}.zip")
+        partial = os.path.join(OUTPUT_DIR, f"~{AUTO_PREFIX}{run_id}")
+        try:
+            # o GitHub redireciona para um link temporario de outro dominio, e o
+            # requests nao leva o token junto nesse salto
+            with requests.get(f"{GITHUB_API}/repos/{repo}/actions/artifacts/{art['id']}/zip",
+                              headers=headers, timeout=120, stream=True) as dl:
+                dl.raise_for_status()
+                with open(tmp_zip, "wb") as f:
+                    for chunk in dl.iter_content(256 * 1024):
+                        f.write(chunk)
+            with zipfile.ZipFile(tmp_zip) as zf:
+                by_name = {}
+                for info in zf.infolist():
+                    base = os.path.basename(info.filename)
+                    if base in AUTO_FILES and base not in by_name:
+                        by_name[base] = info
+                if "final.mp4" not in by_name or "metadata.json" not in by_name:
+                    continue  # execucao que falhou antes de terminar o video
+                shutil.rmtree(partial, ignore_errors=True)
+                os.makedirs(partial)
+                # a lista ordena pela data do arquivo: sem isso todo video
+                # baixado pareceria gerado agora
+                created = _iso_epoch(art.get("created_at")) or time.time()
+                for base, info in by_name.items():
+                    target = os.path.join(partial, base)
+                    with zf.open(info) as src, open(target, "wb") as out:
+                        shutil.copyfileobj(src, out)
+                    os.utime(target, (created, created))
+                os.replace(partial, dest)
+                new += 1
+        except (requests.RequestException, zipfile.BadZipFile, OSError) as exc:
+            errors.append(f"{art.get('name')}: {exc}")
+        finally:
+            if os.path.exists(tmp_zip):
+                os.remove(tmp_zip)
+            shutil.rmtree(partial, ignore_errors=True)
+    result = {"novos": new}
+    if errors:
+        result["erro"] = "Alguns videos nao baixaram: " + "; ".join(errors[:3])
+    return result
 
 
 class Job:
@@ -345,6 +445,7 @@ class Panel:
         self.job: Job | None = None
         self.lock = threading.Lock()
         self.tiktok = TikTokAccount(self)
+        self.fetch_lock = threading.Lock()
 
     def env(self) -> dict:
         # relido a cada execucao: publicar no TikTok e os scripts de login
@@ -400,6 +501,37 @@ class Panel:
         with self.lock:
             if self.job:
                 self.job.cancel()
+
+    def fetch_auto(self) -> dict:
+        # dois cliques seguidos baixariam o mesmo video duas vezes
+        if not self.fetch_lock.acquire(blocking=False):
+            return {"novos": 0, "erro": "Ja estou buscando, espere terminar."}
+        try:
+            return fetch_github_videos(self.env())
+        finally:
+            self.fetch_lock.release()
+
+    def show_video(self, run_name: str) -> None:
+        """Abre a pasta do video com o arquivo ja selecionado, para arrastar
+        para a pagina de upload do TikTok."""
+        path = run_path(run_name)
+        video = path and os.path.join(path, "final.mp4")
+        if not video or not os.path.exists(video):
+            raise ValueError("Video nao encontrado.")
+        if os.name == "nt":
+            # o explorer devolve codigo 1 mesmo quando abre: nao da para conferir
+            subprocess.Popen(["explorer", f"/select,{os.path.normpath(video)}"])
+        else:
+            webbrowser.open(f"file://{path}")
+
+    def mark_posted_on_site(self, run_name: str) -> None:
+        path = run_path(run_name)
+        if not path:
+            raise ValueError("Video nao encontrado.")
+        append_history(path, "tiktok", {
+            "ok": True, "modo": "site",
+            "quando": datetime.datetime.now().isoformat(timespec="seconds"),
+        })
 
     def state(self) -> dict:
         cfg = load_config()
@@ -607,6 +739,14 @@ class Handler(BaseHTTPRequestHandler):
                                             "mensagem": str(exc)})
             if path == "/api/cancelar":
                 self.panel.cancel()
+                return self._send_json({"ok": True})
+            if path == "/api/github/buscar":
+                return self._send_json(self.panel.fetch_auto())
+            if path == "/api/mostrar-video":
+                self.panel.show_video(str(body.get("execucao") or ""))
+                return self._send_json({"ok": True})
+            if path == "/api/tiktok/postado-no-site":
+                self.panel.mark_posted_on_site(str(body.get("execucao") or ""))
                 return self._send_json({"ok": True})
         except Busy as exc:
             return self._send_json({"erro": str(exc)}, 409)
