@@ -14,16 +14,15 @@ import argparse
 import datetime
 import json
 import os
-import re
 import sys
 
 import yaml
 
 from src import (character, github_secrets, hashtags, scenes as scenes_mod, script_gen,
                  sfx, thumbnail, tiktok_api, video, youtube_api)
+from src.env_file import ENV_FILE, update_env_file
 
 OUTPUT_DIR = "output"
-ENV_FILE = ".env"
 
 # o que cada plataforma precisa para publicar. Conferido antes de qualquer
 # chamada de rede, para faltar chave virar uma mensagem clara e nao um KeyError
@@ -196,10 +195,10 @@ def main() -> None:
     )
 
     thumb_cfg = cfg.get("thumbnail", {})
-    thumbnail_path = None
     if thumb_cfg.get("enabled", True):
+        # publish_run acha a capa pelo nome do arquivo na pasta
         cover_text = script_gen.cover_text(script, max_words=thumb_cfg.get("max_words", 6))
-        thumbnail_path = thumbnail.build_thumbnail(
+        thumbnail.build_thumbnail(
             scene_image=scenes[0]["image"],
             text=cover_text,
             width=width, height=height,
@@ -314,28 +313,6 @@ def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> 
     return results
 
 
-def _update_env_file(path: str, key: str, value: str) -> None:
-    """Troca o valor de uma chave no .env sem mexer no resto do arquivo,
-    inclusive na quebra de linha do Windows."""
-    with open(path, encoding="utf-8", newline="") as f:
-        lines = f.read().splitlines(keepends=True)
-    pattern = re.compile(rf"^\s*{re.escape(key)}\s*=")
-    for i, line in enumerate(lines):
-        if pattern.match(line):
-            ending = line[len(line.rstrip("\r\n")):]
-            lines[i] = f"{key}={value}{ending}"
-            break
-    else:
-        newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
-        if lines and not lines[-1].endswith(("\n", "\r")):
-            lines[-1] += newline
-        lines.append(f"{key}={value}{newline}")
-    tmp_path = f"{path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8", newline="") as f:
-        f.write("".join(lines))
-    os.replace(tmp_path, path)
-
-
 def _save_tiktok_refresh_token(new_token: str) -> None:
     # o TikTok pode devolver o mesmo token na renovacao: nada a salvar
     if new_token == os.environ.get("TIKTOK_REFRESH_TOKEN"):
@@ -344,7 +321,7 @@ def _save_tiktok_refresh_token(new_token: str) -> None:
     # rodando na maquina (painel ou linha de comando) o token vem do .env, e sem
     # atualizar o arquivo a proxima publicacao local usaria o valor ja invalido
     if os.path.exists(ENV_FILE):
-        _update_env_file(ENV_FILE, "TIKTOK_REFRESH_TOKEN", new_token)
+        update_env_file(ENV_FILE, "TIKTOK_REFRESH_TOKEN", new_token)
         print("  [tiktok] TIKTOK_REFRESH_TOKEN atualizado no .env.")
         saved = True
     gh_pat = os.environ.get("GH_PAT")

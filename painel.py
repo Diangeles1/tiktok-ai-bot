@@ -27,6 +27,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import yaml
 
 from src import script_gen
+from src.env_file import read_env_file
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(ROOT, "output")
@@ -59,26 +60,6 @@ if hasattr(sys.stdout, "reconfigure"):
 def load_config() -> dict:
     with open(os.path.join(ROOT, "config.yaml"), encoding="utf-8") as f:
         return yaml.safe_load(f)
-
-
-def load_env(path: str) -> dict:
-    """Le o .env (CHAVE=valor). Relido a cada execucao, porque publicar no
-    TikTok pode gravar um token novo nele."""
-    values = {}
-    if not os.path.exists(path):
-        return values
-    # utf-8-sig: o PowerShell grava o arquivo com BOM, que grudaria na 1a chave
-    with open(path, encoding="utf-8-sig") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            value = value.strip()
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-                value = value[1:-1]
-            values[key.strip()] = value
-    return values
 
 
 def read_json(path: str) -> dict | None:
@@ -227,7 +208,9 @@ class Panel:
         self.lock = threading.Lock()
 
     def env(self) -> dict:
-        return {**os.environ, **load_env(self.env_file)}
+        # relido a cada execucao: publicar no TikTok e os scripts de login
+        # gravam chaves novas nele
+        return {**os.environ, **read_env_file(self.env_file)}
 
     def _start(self, kind: str, run_name: str, args: list[str], extra_env: dict) -> Job:
         with self.lock:
