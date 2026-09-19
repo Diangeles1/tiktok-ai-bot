@@ -18,9 +18,9 @@ import sys
 
 import yaml
 
-from src import (character, github_secrets, hashtags, scenes as scenes_mod, script_gen,
-                 sfx, thumbnail, tiktok_api, video, youtube_api)
-from src.env_file import ENV_FILE, update_env_file
+from src import (character, hashtags, scenes as scenes_mod, script_gen,
+                 sfx, thumbnail, tiktok_api, tiktok_token, video, youtube_api)
+from src.env_file import ENV_FILE
 
 OUTPUT_DIR = "output"
 
@@ -290,8 +290,13 @@ def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> 
             # metadata.json: a legenda e a descricao sao remontadas do titulo
             tag_line = " ".join(meta.get("hashtags", []))
             if platform == "tiktok":
-                caption = meta.get("legenda_tiktok") or f"{meta['titulo_youtube']} {tag_line}".strip()
-                outcome = _post_to_tiktok(video_path, caption, platform_cfg)
+                # o painel manda aqui o que a pessoa escolheu na tela de
+                # publicar (modo, legenda editada, privacidade, interacoes)
+                choices = json.loads(os.environ.get("TIKTOK_POST") or "{}")
+                caption = (choices.get("title")
+                           or meta.get("legenda_tiktok")
+                           or f"{meta['titulo_youtube']} {tag_line}".strip())
+                outcome = _post_to_tiktok(video_path, caption, platform_cfg, choices)
             else:
                 description = (meta.get("descricao_youtube")
                                or f"{meta['titulo_youtube']}\n\n{tag_line}".strip())
@@ -316,36 +321,17 @@ def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> 
 
 
 def _save_tiktok_refresh_token(new_token: str) -> None:
-    # o TikTok pode devolver o mesmo token na renovacao: nada a salvar
-    if new_token == os.environ.get("TIKTOK_REFRESH_TOKEN"):
-        return
-    saved = False
-    # rodando na maquina (painel ou linha de comando) o token vem do .env, e sem
-    # atualizar o arquivo a proxima publicacao local usaria o valor ja invalido
-    if os.path.exists(ENV_FILE):
-        update_env_file(ENV_FILE, "TIKTOK_REFRESH_TOKEN", new_token)
-        print("  [tiktok] TIKTOK_REFRESH_TOKEN atualizado no .env.")
-        saved = True
-    gh_pat = os.environ.get("GH_PAT")
-    gh_repo = os.environ.get("GH_REPOSITORY")
-    if gh_pat and gh_repo:
-        try:
-            github_secrets.update_repo_secret(gh_pat, gh_repo, "TIKTOK_REFRESH_TOKEN", new_token)
-            print("  [tiktok] TIKTOK_REFRESH_TOKEN atualizado no GitHub.")
-            saved = True
-        except Exception as exc:
-            # no Actions o GitHub e o unico lugar do token: la a falha tem que
-            # parar tudo. Na maquina o .env ja guardou, entao so avisa
-            if not saved:
-                raise
-            print(f"  [tiktok] AVISO: token salvo no .env, mas nao no GitHub ({exc}). "
-                  f"A publicacao automatica vai continuar com o token antigo.")
-    if not saved:
-        print("  [tiktok] AVISO: GH_PAT/GH_REPOSITORY nao configurados. O novo refresh_token "
-              "NAO foi salvo e a proxima execucao vai falhar. Configure esses secrets.")
+    tiktok_token.save_refresh_token(new_token, os.environ, ENV_FILE)
 
 
-def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict) -> dict:
+def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict,
+                    choices: dict | None = None) -> dict:
+    """`choices` vem da tela de publicar do painel e vale mais que o config.yaml;
+    no horario automatico fica vazio."""
+    choices = choices or {}
+    mode = choices.get("mode") or tiktok_cfg.get("mode", "direct")
+    privacy = choices.get("privacy_level") or tiktok_cfg.get("privacy_level", "SELF_ONLY")
+    options = {k: choices[k] for k in tiktok_api.POST_OPTIONS if k in choices}
     print("  [tiktok] publicando...")
     result = tiktok_api.post_video(
         client_key=os.environ["TIKTOK_CLIENT_KEY"],
@@ -353,19 +339,26 @@ def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict) -> dict:
         refresh_token=os.environ["TIKTOK_REFRESH_TOKEN"],
         video_path=video_path,
         title=title,
-        privacy_level=tiktok_cfg.get("privacy_level", "SELF_ONLY"),
+        privacy_level=privacy,
         on_token_refreshed=_save_tiktok_refresh_token,
-        mode=tiktok_cfg.get("mode", "direct"),
+        mode=mode,
+        options=options,
+        # o painel ja renovou o token para consultar a conta: renovar de novo
+        # aqui giraria o refresh_token duas vezes por publicacao
+        access_token=os.environ.get("TIKTOK_ACCESS_TOKEN") or None,
     )
-    if tiktok_cfg.get("mode", "direct") == "upload":
+    if mode == "upload":
         print(f"  [tiktok] enviado para a caixa de entrada do app (publish_id={result['publish_id']}). "
               f"Abra o TikTok no celular e finalize a postagem. Legenda sugerida:")
         print(f"  {title}")
     else:
         print(f"  [tiktok] publicado (publish_id={result['publish_id']}, "
-              f"status={result['status'].get('status')})")
-    return {"publish_id": result["publish_id"], "modo": tiktok_cfg.get("mode", "direct"),
-            "status": result["status"].get("status")}
+              f"status={result['status'].get('status')}, privacidade={privacy})")
+    outcome = {"publish_id": result["publish_id"], "modo": mode,
+               "status": result["status"].get("status")}
+    if mode != "upload":
+        outcome["privacidade"] = privacy
+    return outcome
 
 
 def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict,
