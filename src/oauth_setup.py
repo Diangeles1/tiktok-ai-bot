@@ -37,11 +37,13 @@ def _scopes() -> str:
         return os.environ["TIKTOK_SCOPES"]
     try:
         with open("config.yaml", encoding="utf-8") as f:
-            mode = (yaml.safe_load(f).get("tiktok") or {}).get("mode", "direct")
+            tiktok = yaml.safe_load(f).get("tiktok") or {}
     except OSError:
-        mode = "direct"
-    # upload: caixa de entrada (video.upload). direct: publica sozinho (video.publish)
-    return "user.info.basic,video.upload" + (",video.publish" if mode == "direct" else "")
+        tiktok = {}
+    # upload: caixa de entrada (video.upload). direct e a tela do painel:
+    # publica no perfil (video.publish)
+    direct = tiktok.get("mode", "direct") == "direct" or tiktok.get("painel_direto", False)
+    return "user.info.basic,video.upload" + (",video.publish" if direct else "")
 
 
 def _redirect_uri() -> str:

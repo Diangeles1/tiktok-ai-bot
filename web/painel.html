@@ -204,6 +204,46 @@
   .hist .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .badge { display: inline-block; margin: 4px 4px 0 0; padding: 1px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: 11px; font-weight: 600; }
 
+  /* tela de publicar direto no TikTok */
+  .tt {
+    margin: 2px 0 10px 27px; padding: 14px; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--surface-2); display: flex; flex-direction: column; gap: 14px;
+  }
+  @media (max-width: 520px) { .tt { margin-left: 0; } }
+  .tt:empty { display: none; }
+  .tt .lbl { margin-bottom: 4px; }
+  .modos { display: flex; flex-wrap: wrap; gap: 8px; }
+  .modos label {
+    display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 14px;
+  }
+  .modos label.sel { border-color: var(--accent); }
+  .modos input { accent-color: var(--accent); margin: 0; }
+  .conta { display: flex; align-items: center; gap: 10px; }
+  .conta img, .conta .ph { flex: none; width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: var(--border); }
+  .conta .quem { min-width: 0; flex: 1; }
+  .conta .n { font-weight: 600; overflow-wrap: anywhere; }
+  .conta .u { color: var(--muted); font-size: 13px; }
+  .tt textarea {
+    width: 100%; min-height: 86px; resize: vertical; font: inherit; font-size: 14px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px;
+  }
+  .tt select { background: var(--surface); }
+  .conta-linha { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+  .check { display: inline-flex; align-items: flex-start; gap: 8px; font-size: 14px; cursor: pointer; }
+  .check input { flex: none; margin: 3px 0 0; width: 16px; height: 16px; accent-color: var(--accent); }
+  .check.off { color: var(--muted); cursor: not-allowed; }
+  .check .det { display: block; color: var(--muted); font-size: 12.5px; }
+  .sub-opcoes { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 0 24px; }
+  .rotulo { font-size: 13px; color: var(--muted); margin: 8px 0 0 24px; }
+  .rotulo.falta { color: var(--err); }
+  .nota { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 8px 12px; font-size: 13.5px; }
+  .nota.err { background: var(--err-bg); color: var(--err); }
+  .nota code { font-size: 12.5px; overflow-wrap: anywhere; }
+  .declara { font-size: 13px; color: var(--muted); margin: 0; }
+  button.mini { padding: 4px 10px; font-size: 12.5px; }
+
   dialog {
     width: min(440px, calc(100% - 32px)); padding: 22px; border: 1px solid var(--border);
     border-radius: 16px; background: var(--surface); color: var(--text);
@@ -329,6 +369,8 @@ const st = {
   polling: false,
   base: 0,           // segundos da execucao na ultima resposta
   baseEm: 0,         // quando essa resposta chegou
+  conta: null,       // conta do TikTok para publicar direto: null, 'carregando' ou a resposta
+  tt: null,          // escolhas da tela do TikTok para o video aberto
 };
 
 function h(tag, props = {}, ...kids) {
@@ -498,10 +540,12 @@ function renderPublicacao(run) {
       : 'Publica direto no perfil.';
     else det = `Sai como ${{ public: 'público', unlisted: 'não listado', private: 'privado' }[cfg.privacidade] || cfg.privacidade}.`;
     if (feito && pode) det = `Já publicado. Marque só se quiser publicar de novo. ${det}`;
-    const input = h('input', { type: 'checkbox', id: `pub-${p}`, value: p, disabled: !pode, onchange: atualizarBotaoPublicar });
+    const input = h('input', { type: 'checkbox', id: `pub-${p}`, value: p, disabled: !pode,
+      onchange: () => { if (p === 'tiktok') renderTikTok(); atualizarBotaoPublicar(); } });
     input.checked = pode && !feito;
     caixa.append(h('label', { class: `opcao${pode ? '' : ' off'}`, for: `pub-${p}` }, input,
-      h('span', {}, h('span', { class: 'nome', text: p === 'youtube' ? 'YouTube Shorts' : 'TikTok' }), h('span', { class: 'det', text: det }))));
+      h('span', {}, h('span', { class: 'nome', text: p === 'youtube' ? 'YouTube Shorts' : 'TikTok' }), h('span', { class: 'det', id: `det-${p}`, text: det }))));
+    if (p === 'tiktok') caixa.append(h('div', { class: 'tt', id: 'tt' }));
   }
 
   const res = $('pub-res');
@@ -515,12 +559,218 @@ function renderPublicacao(run) {
     } else if (t.ok) {
       res.append(h('div', { class: 'res ok', text: t.modo === 'upload'
         ? `Enviado para a caixa de entrada do TikTok em ${quandoIso(t.quando)}. Abra o app no celular para finalizar a postagem.`
-        : `Publicado no TikTok em ${quandoIso(t.quando)}.` }));
+        : `Publicado no TikTok em ${quandoIso(t.quando)}${t.privacidade ? ` (quem pode ver: ${PRIVACIDADES[t.privacidade] || t.privacidade})` : ''}. `
+          + 'Pode levar alguns minutos para o TikTok processar o vídeo e ele aparecer no perfil.' }));
     } else {
       res.append(h('div', { class: 'res err', text: `Falhou no ${NOMES[p]} (${quandoIso(t.quando)}): ${t.erro}` }));
     }
   }
+  iniciarTikTok(run);
   atualizarBotaoPublicar();
+}
+
+/* ---------- tela de publicar direto no TikTok ----------
+   Segue as regras da revisao do app no TikTok: mostra a conta que vai
+   receber o post, quem pode ver vem das opcoes da conta e sem nada
+   pre-escolhido, comentario/dueto/costura desmarcados (e travados se a
+   conta desligou), divulgacao comercial desligada por padrao, conteudo de
+   marca nao pode ser "Somente eu", e o aviso de musica antes de publicar. */
+
+const PRIVACIDADES = {
+  PUBLIC_TO_EVERYONE: 'Todos',
+  FOLLOWER_OF_CREATOR: 'Seguidores',
+  MUTUAL_FOLLOW_FRIENDS: 'Amigos (seguidores que você segue de volta)',
+  SELF_ONLY: 'Somente eu',
+};
+const LINK_MUSICA = 'https://www.tiktok.com/legal/page/global/music-usage-confirmation/en';
+const LINK_MARCA = 'https://www.tiktok.com/legal/page/global/bc-policy/en';
+
+const ttAtivo = () => {
+  const e = st.estado;
+  return !!(e && e.plataformas.tiktok.painel_direto && e.plataformas.tiktok.ativo && e.plataformas.tiktok.credenciais);
+};
+const ttMarcado = () => { const el = $('pub-tiktok'); return !!(el && el.checked && !el.disabled); };
+const contaOk = () => st.conta && st.conta !== 'carregando' && st.conta.ok;
+
+function iniciarTikTok(run) {
+  if (!ttAtivo()) { renderTikTok(); return; }
+  if (!st.tt || st.tt.run !== run.nome) {
+    const m = run.metadata;
+    st.tt = {
+      run: run.nome,
+      modo: st.estado.plataformas.tiktok.app_aprovado ? 'direto' : 'app',
+      legenda: m.legenda_tiktok || [m.titulo_youtube, ...(m.hashtags || [])].filter(Boolean).join(' '),
+      duracao: m.duracao_segundos || null,
+      privacidade: '',
+      comentario: false, dueto: false, costura: false,
+      divulgacao: false, sua_marca: false, conteudo_de_marca: false,
+      ia: true,
+    };
+  }
+  renderTikTok();
+  if (st.tt.modo === 'direto' && !st.conta) carregarConta();
+}
+
+async function carregarConta() {
+  st.conta = 'carregando';
+  renderTikTok();
+  try {
+    st.conta = await api('/api/tiktok/conta', {});
+  } catch (err) {
+    st.conta = { ok: false, motivo: 'erro', mensagem: err.message };
+  }
+  // a opcao escolhida pode nao existir mais para esta conta
+  if (contaOk() && st.tt && !st.conta.privacidades.includes(st.tt.privacidade)) st.tt.privacidade = '';
+  renderTikTok();
+  atualizarBotaoPublicar();
+}
+
+function mudarTT(campo, valor) {
+  st.tt[campo] = valor;
+  if (campo === 'divulgacao' && !valor) { st.tt.sua_marca = false; st.tt.conteudo_de_marca = false; }
+  // conteudo de marca nao pode ser privado: desfaz a escolha em vez de deixar invalida
+  if (st.tt.divulgacao && st.tt.conteudo_de_marca && st.tt.privacidade === 'SELF_ONLY') st.tt.privacidade = '';
+  if (campo === 'modo' && valor === 'direto' && !st.conta) carregarConta();
+  const foco = document.activeElement && document.activeElement.id;
+  renderTikTok();
+  if (foco && $(foco)) $(foco).focus();
+  atualizarBotaoPublicar();
+}
+
+function ttCheck(id, campo, rotulo, { desligado = false, det = null, motivo = null } = {}) {
+  const input = h('input', { type: 'checkbox', id, disabled: desligado,
+    onchange: (ev) => mudarTT(campo, ev.target.checked) });
+  input.checked = !desligado && !!st.tt[campo];
+  return h('label', { class: `check${desligado ? ' off' : ''}`, for: id, title: desligado ? motivo : null }, input,
+    h('span', {}, rotulo, det ? h('span', { class: 'det', text: det }) : null));
+}
+
+function comando(texto) { return h('code', { text: texto }); }
+
+function renderTikTok() {
+  const box = $('tt');
+  if (!box) return;
+  box.replaceChildren();
+  // com a tela aberta, a linha de descricao do TikTok (caixa de entrada) sai
+  const aberta = ttAtivo() && ttMarcado() && !!st.tt;
+  if ($('det-tiktok')) $('det-tiktok').hidden = aberta;
+  if (!aberta) return;
+  const t = st.tt;
+
+  const modos = h('div', { class: 'modos', role: 'radiogroup', 'aria-label': 'Como publicar no TikTok' });
+  for (const [valor, rotulo] of [['direto', 'Publicar direto no perfil'], ['app', 'Mandar para o app do celular']]) {
+    const input = h('input', { type: 'radio', name: 'tt-modo', id: `tt-modo-${valor}`, value: valor,
+      onchange: () => mudarTT('modo', valor) });
+    input.checked = t.modo === valor;
+    modos.append(h('label', { class: t.modo === valor ? 'sel' : null, for: `tt-modo-${valor}` }, input, rotulo));
+  }
+  box.append(modos);
+
+  if (t.modo === 'app') {
+    box.append(h('p', { class: 'hint', text: 'Vai para a caixa de entrada do app. Você finaliza a postagem no celular, escolhendo quem pode ver e colando a legenda.' }));
+    return;
+  }
+
+  if (st.conta === 'carregando' || !st.conta) {
+    box.append(h('p', { class: 'hint', text: 'Consultando a conta do TikTok...' }));
+    return;
+  }
+  if (!st.conta.ok) {
+    const nota = h('div', { class: 'nota err' });
+    if (st.conta.motivo === 'permissao') {
+      nota.append('Para publicar direto daqui, ligue o Direct Post no app do TikTok for Developers e reconecte a conta com ',
+        comando('python -m src.oauth_setup --sem-terminal'), '. Até lá, use "Mandar para o app do celular".');
+    } else if (st.conta.motivo === 'reconectar') {
+      nota.append(`${st.conta.mensagem} Reconecte com `, comando('python -m src.oauth_setup --sem-terminal'), '.');
+    } else {
+      nota.append(st.conta.mensagem || 'Não consegui consultar a conta do TikTok.');
+    }
+    box.append(nota, h('div', {}, h('button', { class: 'mini', onclick: carregarConta, text: 'Tentar de novo' })));
+    return;
+  }
+
+  const c = st.conta;
+  box.append(h('div', { class: 'conta' },
+    c.avatar ? h('img', { src: c.avatar, alt: '' }) : h('span', { class: 'ph' }),
+    h('div', { class: 'quem' },
+      h('div', { class: 'n', text: `Publicando como ${c.apelido || c.usuario}` }),
+      c.usuario ? h('div', { class: 'u', text: `@${c.usuario}` }) : null),
+    h('button', { class: 'mini', onclick: carregarConta, text: 'Atualizar' })));
+
+  if (!st.estado.plataformas.tiktok.app_aprovado) {
+    box.append(h('div', { class: 'nota', text: 'O TikTok ainda não aprovou o app: até lá, a publicação direta só sai como "Somente eu". Para sair público hoje, use "Mandar para o app do celular".' }));
+  }
+  if (c.duracao_max && t.duracao && t.duracao > c.duracao_max) {
+    box.append(h('div', { class: 'nota err', text: `O vídeo tem ${String(t.duracao).replace('.', ',')} s e esta conta aceita no máximo ${c.duracao_max} s no TikTok.` }));
+  }
+
+  const area = h('textarea', { id: 'tt-legenda', maxlength: 2200,
+    oninput: (ev) => { t.legenda = ev.target.value; $('tt-cont').textContent = `${t.legenda.length}/2200`; atualizarBotaoPublicar(); } });
+  area.value = t.legenda;
+  box.append(h('div', {},
+    h('label', { class: 'lbl', for: 'tt-legenda', text: 'Legenda' }), area,
+    h('div', { class: 'conta-linha' }, h('span', { text: 'Pode editar à vontade, inclusive as hashtags.' }),
+      h('span', { id: 'tt-cont', text: `${t.legenda.length}/2200` }))));
+
+  const marcaPaga = t.divulgacao && t.conteudo_de_marca;
+  const sel = h('select', { id: 'tt-privacidade', onchange: (ev) => mudarTT('privacidade', ev.target.value) });
+  sel.append(h('option', { value: '', text: 'Escolha quem pode ver', disabled: true }));
+  for (const op of c.privacidades) {
+    const trava = op === 'SELF_ONLY' && marcaPaga;
+    sel.append(h('option', { value: op, disabled: trava,
+      text: trava ? `${PRIVACIDADES[op] || op} (conteúdo de marca não pode ser privado)` : (PRIVACIDADES[op] || op) }));
+  }
+  sel.value = t.privacidade;
+  box.append(h('div', {}, h('label', { class: 'lbl', for: 'tt-privacidade', text: 'Quem pode ver este vídeo' }), sel));
+
+  const motivo = 'Desativado nas configurações da sua conta do TikTok';
+  box.append(h('div', {}, h('span', { class: 'lbl', text: 'Permitir' }), h('div', { class: 'checks' },
+    ttCheck('tt-comentario', 'comentario', 'Comentários', { desligado: c.comentario_desligado, motivo }),
+    ttCheck('tt-dueto', 'dueto', 'Dueto', { desligado: c.dueto_desligado, motivo }),
+    ttCheck('tt-costura', 'costura', 'Costura (Stitch)', { desligado: c.costura_desligada, motivo }))));
+
+  const divulgacao = h('div', {}, h('span', { class: 'lbl', text: 'Divulgação de conteúdo comercial' }),
+    ttCheck('tt-divulgacao', 'divulgacao', 'Este vídeo promove uma marca, produto ou serviço',
+      { det: 'Ligue se o vídeo promove você, o seu negócio ou outra marca.' }));
+  if (t.divulgacao) {
+    divulgacao.append(h('div', { class: 'sub-opcoes' },
+      ttCheck('tt-sua-marca', 'sua_marca', 'Sua marca', { det: 'Você está promovendo a si mesmo ou o seu próprio negócio.' }),
+      ttCheck('tt-marca', 'conteudo_de_marca', 'Conteúdo de marca', { det: 'Você está promovendo outra marca ou um terceiro.' })));
+    const rotulo = t.conteudo_de_marca ? 'O vídeo será rotulado como "Parceria paga".'
+      : t.sua_marca ? 'O vídeo será rotulado como "Conteúdo promocional".'
+      : 'Escolha "Sua marca", "Conteúdo de marca" ou os dois.';
+    divulgacao.append(h('p', { class: `rotulo${t.conteudo_de_marca || t.sua_marca ? '' : ' falta'}`, text: rotulo }));
+  }
+  box.append(divulgacao);
+
+  box.append(ttCheck('tt-ia', 'ia', 'Rotular como conteúdo gerado por IA',
+    { det: 'As imagens e a narração dos vídeos do canal são geradas por IA.' }));
+
+  const declara = h('p', { class: 'declara' }, 'Ao publicar, você concorda com a ');
+  if (marcaPaga) {
+    declara.append(h('a', { href: LINK_MARCA, target: '_blank', rel: 'noopener', text: 'Política de Conteúdo de Marca' }), ' e a ');
+  }
+  declara.append(h('a', { href: LINK_MUSICA, target: '_blank', rel: 'noopener', text: 'Confirmação de Uso de Música' }), ' do TikTok.');
+  box.append(declara);
+}
+
+/* por que o TikTok direto ainda nao pode publicar; vazio quando pode */
+function pendenciaTikTok() {
+  if (!ttAtivo() || !ttMarcado() || !st.tt || st.tt.modo !== 'direto') return '';
+  if (!contaOk()) return st.conta === 'carregando' || !st.conta ? 'Consultando a conta do TikTok...' : 'Resolva o aviso do TikTok ou mande para o app do celular.';
+  const t = st.tt;
+  if (st.conta.duracao_max && t.duracao && t.duracao > st.conta.duracao_max) return 'O vídeo passa da duração máxima do TikTok.';
+  if (!t.legenda.trim()) return 'Escreva a legenda do TikTok.';
+  if (!t.privacidade) return 'Escolha quem pode ver o vídeo no TikTok.';
+  if (t.divulgacao && !t.sua_marca && !t.conteudo_de_marca) return 'Complete a divulgação de conteúdo comercial.';
+  return '';
+}
+
+function escolhasTikTok() {
+  if (!ttAtivo() || !st.tt) return undefined;
+  if (st.tt.modo !== 'direto') return { modo: 'app' };
+  const { privacidade, legenda, comentario, dueto, costura, divulgacao, sua_marca, conteudo_de_marca, ia } = st.tt;
+  return { modo: 'direto', privacidade, legenda, comentario, dueto, costura, divulgacao, sua_marca, conteudo_de_marca, ia };
 }
 
 function plataformasMarcadas() {
@@ -531,10 +781,11 @@ function atualizarBotaoPublicar() {
   const run = st.runs.find((r) => r.nome === st.atual);
   const escolhidas = plataformasMarcadas();
   const ocupado = rodando();
-  $('btn-publicar').disabled = ocupado || !run || !run.tem_video || !escolhidas.length;
+  const pendencia = pendenciaTikTok();
+  $('btn-publicar').disabled = ocupado || !run || !run.tem_video || !escolhidas.length || !!pendencia;
   $('pub-hint').textContent = ocupado && st.job.tipo === 'publicar' ? 'Publicando...'
     : ocupado ? 'Espere a geração em andamento terminar.'
-    : !escolhidas.length ? 'Escolha onde publicar.' : '';
+    : !escolhidas.length ? 'Escolha onde publicar.' : pendencia;
 }
 
 $('btn-copiar').addEventListener('click', async () => {
@@ -575,10 +826,13 @@ $('btn-publicar').addEventListener('click', () => {
   const escolhidas = plataformasMarcadas();
   if (!run || !escolhidas.length) return;
   const e = st.estado;
+  const tt = escolhasTikTok();
   const partes = escolhidas.map((p) => p === 'youtube'
     ? `publicar no YouTube (${{ public: 'público', unlisted: 'não listado', private: 'privado' }[e.plataformas.youtube.privacidade] || e.plataformas.youtube.privacidade})`
-    : e.plataformas.tiktok.modo === 'upload' ? 'enviar para a caixa de entrada do TikTok' : 'publicar no TikTok');
-  $('dlg-texto').textContent = `Vai ${partes.join(' e ')} o vídeo "${run.metadata.titulo_youtube || run.metadata.tema || run.nome}".`;
+    : tt && tt.modo === 'direto' ? `publicar no TikTok de ${st.conta.apelido || st.conta.usuario} (quem pode ver: ${PRIVACIDADES[tt.privacidade] || tt.privacidade})`
+    : (tt ? tt.modo === 'app' : e.plataformas.tiktok.modo === 'upload') ? 'enviar para a caixa de entrada do TikTok' : 'publicar no TikTok');
+  $('dlg-texto').textContent = `Vai ${partes.join(' e ')} o vídeo "${run.metadata.titulo_youtube || run.metadata.tema || run.nome}".`
+    + (tt && tt.modo === 'direto' && escolhidas.includes('tiktok') ? ' Depois de publicado, o TikTok pode levar alguns minutos para processar o vídeo.' : '');
   $('dlg').showModal();
 });
 $('dlg-nao').addEventListener('click', () => $('dlg').close());
@@ -586,7 +840,9 @@ $('dlg-sim').addEventListener('click', async () => {
   $('dlg').close();
   $('btn-publicar').disabled = true;
   try {
-    const { job } = await api('/api/publicar', { execucao: st.atual, plataformas: plataformasMarcadas() });
+    const escolhidas = plataformasMarcadas();
+    const { job } = await api('/api/publicar', { execucao: st.atual, plataformas: escolhidas,
+      tiktok: escolhidas.includes('tiktok') ? escolhasTikTok() : undefined });
     iniciarJob(job);
   } catch (err) {
     alert(err.message);

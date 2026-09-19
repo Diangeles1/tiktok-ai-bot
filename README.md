@@ -141,9 +141,29 @@ horas). Com três vídeos por dia, finalize os rascunhos todo dia para não trav
 próximos envios. A legenda sugerida, já com as hashtags, aparece no log da execução e
 no campo `legenda_tiktok` do `metadata.json`.
 
-**Para o bot publicar sozinho e em público,** solicite a auditoria do app no TikTok for
-Developers (Manage Apps > seu app > Submit for Review). Quando sair, mude para
-`mode: "direct"` e `privacy_level: "PUBLIC_TO_EVERYONE"`.
+**Publicar direto pelo painel.** Com `tiktok.painel_direto: true`, o painel tem a tela de
+publicar direto no perfil que a revisão do TikTok exige:
+
++ mostra a conta que vai receber o post, com nome e foto
++ deixa editar a legenda e as hashtags
++ "Quem pode ver" começa vazio e só oferece as opções que a conta permite
++ comentário, dueto e costura começam desmarcados, e ficam travados se a conta desligou
++ divulgação de conteúdo comercial ("Sua marca" e "Conteúdo de marca"), com o rótulo que
+  o vídeo vai receber; conteúdo de marca não pode sair como "Somente eu"
++ rótulo de conteúdo gerado por IA, ligado por padrão
++ o aviso da Confirmação de Uso de Música antes de publicar, e depois o aviso de que o
+  TikTok pode levar alguns minutos para processar o vídeo
+
+As mesmas regras são conferidas de novo no servidor do painel, com a conta consultada na
+hora. O TikTok pede que a pessoa confirme cada post, então o horário automático continua
+no modo `upload` e a publicação direta é a do painel.
+
+**Para sair público direto,** ligue o **Direct Post** no Content Posting API do app,
+reconecte a conta (passo 6, que passa a pedir `video.publish`) e envie o app para revisão
+(Manage Apps > seu app > Submit for Review). Os textos para a ficha e o roteiro do vídeo
+de demonstração estão em [revisao_tiktok.md](revisao_tiktok.md). Até a aprovação, a
+publicação direta só sai como "Somente eu". Quando o TikTok aprovar, mude
+`tiktok.app_aprovado` para `true` e o painel passa a abrir na publicação direta.
 
 O YouTube Shorts não tem essa restrição: com o app OAuth do Google em publishing status
 **"In production"**, os vídeos já saem públicos direto (configurável em
@@ -185,8 +205,8 @@ significa refazer os vídeos. Enquanto ele não for trocado, o log avisa a cada 
 
 - Acesse [developers.tiktok.com/apps](https://developers.tiktok.com/apps) e clique em Create app
 - Adicione os produtos **Login Kit** e **Content Posting API**
-- Nos escopos do app, confirme `user.info.basic` e `video.upload`. Adicione também
-  `video.publish` se for usar o modo direto depois da auditoria
+- Nos escopos do app, confirme `user.info.basic` e `video.upload`. Para publicar direto
+  pelo painel, adicione `video.publish` e ligue o **Direct Post** no Content Posting API
 - Em Login Kit > Redirect URI, cadastre a URL do passo 2
 - Anote `Client key` e `Client secret`
 
@@ -346,7 +366,9 @@ navegador e mostra:
   pronta e o log completo
 + **Conferência:** o vídeo no player, a capa, a passagem declarada e a legenda pronta
   para copiar
-+ **Publicação:** TikTok, YouTube ou os dois, sempre com confirmação antes de enviar
++ **Publicação:** TikTok, YouTube ou os dois, sempre com confirmação antes de enviar. No
+  TikTok, dá para mandar para o app do celular ou publicar direto no perfil, pela tela que
+  a revisão do TikTok exige (veja [Publicação no TikTok](#publicação-no-tiktok))
 + **Histórico:** todos os vídeos gerados, com o que já saiu em cada plataforma
 
 O painel roda só na sua máquina (endereço `127.0.0.1`, inacessível de fora) e usa as
@@ -402,6 +424,8 @@ python test_pipeline.py
 | `src/tts.py` / `src/captions.py` | Narração com timing por palavra e legendas |
 | `src/video.py` / `src/thumbnail.py` | Montagem do vídeo e da capa |
 | `src/tiktok_api.py` / `src/youtube_api.py` | Publicação nas duas plataformas |
+| `src/tiktok_token.py` | Guarda o token renovado do TikTok no `.env` e nos Secrets |
+| `revisao_tiktok.md` | Textos da revisão do app no TikTok e roteiro do vídeo de demonstração |
 | `src/oauth_setup.py` / `src/youtube_oauth_setup.py` | Conexão das contas (roda uma única vez), gravando as chaves no `.env` e nos Secrets |
 | `src/push_secrets.py` | Manda as chaves do `.env` para os Secrets do GitHub |
 | `src/github_secrets.py` | Salva o token renovado do TikTok nos Secrets do repositório |

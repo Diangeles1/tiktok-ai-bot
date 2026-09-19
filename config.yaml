@@ -355,8 +355,20 @@ tiktok:
   #   video.upload. Limite: 5 envios pendentes em 24h, entao finalize os
   #   rascunhos todo dia, senao a partir do segundo dia o envio falha.
   # "direct": o bot publica sozinho, mas app nao auditado so posta privado
-  #   (SELF_ONLY). Use depois que a auditoria sair. Exige video.publish.
+  #   (SELF_ONLY). Exige video.publish.
+  # Vale para o horario automatico. O TikTok pede que a pessoa confirme cada
+  # post, entao publicar direto e com a tela do painel (painel_direto).
   mode: "upload"
+  # O painel mostra a tela de publicar direto no perfil, com tudo que a
+  # revisao do app exige: conta que vai receber, quem pode ver (sem opcao
+  # pre-escolhida), comentario/dueto/costura, divulgacao comercial, rotulo de
+  # conteudo gerado por IA e o aviso da Confirmacao de Uso de Musica.
+  # Precisa do Direct Post ligado no app do TikTok for Developers e da conta
+  # reconectada depois disso (o escopo video.publish entra no pedido).
+  painel_direto: true
+  # true depois que o TikTok aprovar o app: o painel passa a abrir na
+  # publicacao direta em vez de mandar para o app do celular.
+  app_aprovado: false
 
 youtube:
   enabled: true

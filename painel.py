@@ -11,6 +11,7 @@ main.py do GitHub Actions, entao o video sai igual ao da publicacao automatica.
 Uso:  python painel.py
 """
 import argparse
+import base64
 import datetime
 import json
 import os
@@ -24,9 +25,10 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
+import requests
 import yaml
 
-from src import script_gen
+from src import script_gen, tiktok_api, tiktok_token
 from src.env_file import read_env_file
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -200,12 +202,149 @@ class Busy(Exception):
     pass
 
 
+class TikTokUnavailable(Exception):
+    """A tela de publicar direto nao pode ser mostrada. `reason` diz a pagina
+    o que oferecer no lugar (reconectar, esperar o limite, etc.)."""
+
+    def __init__(self, reason: str, message: str):
+        super().__init__(message)
+        self.reason = reason
+
+
+# erros do TikTok que pedem reconectar a conta, e nao tentar de novo
+RECONNECT_CODES = {"scope_not_authorized", "access_token_invalid"}
+# o TikTok pede para parar de publicar enquanto durar
+BLOCKING_CODES = {"spam_risk_too_many_posts", "spam_risk_user_banned_from_posting",
+                  "reached_active_user_cap"}
+TITLE_MAX_UTF16 = 2200
+
+
+class TikTokAccount:
+    """A conta do TikTok vista pelo painel, para a tela de publicar direto.
+
+    O TikTok exige, antes de mostrar essa tela, consultar a conta (apelido,
+    opcoes de privacidade, interacoes desligadas, duracao maxima) e so deixar
+    escolher o que ela permite. O access_token fica em memoria (vale 24 horas)
+    e vai para o main.py na hora de publicar, para o refresh_token nao girar
+    duas vezes. Nada disso chega a pagina alem do que ela exibe."""
+
+    def __init__(self, panel: "Panel"):
+        self.panel = panel
+        self.lock = threading.Lock()
+        self.token: str | None = None
+        self.expires = 0.0
+
+    def access_token(self) -> str:
+        with self.lock:
+            if self.token and time.time() < self.expires - 600:
+                return self.token
+            env = self.panel.env()
+            if not all(env.get(k) for k in CREDENTIALS["tiktok"]):
+                raise TikTokUnavailable("chaves", "Faltam as chaves do TikTok no .env.")
+            try:
+                data = tiktok_api.refresh_access_token(
+                    env["TIKTOK_CLIENT_KEY"], env["TIKTOK_CLIENT_SECRET"],
+                    env["TIKTOK_REFRESH_TOKEN"])
+            except (requests.RequestException, RuntimeError) as exc:
+                raise TikTokUnavailable("reconectar",
+                                        f"O TikTok recusou renovar a conexao: {exc}") from exc
+            tiktok_token.save_refresh_token(data.get("refresh_token", ""), env,
+                                            self.panel.env_file)
+            if "video.publish" not in (data.get("scope") or "").split(","):
+                raise TikTokUnavailable(
+                    "permissao",
+                    "A conta foi conectada sem a permissao de publicar direto (video.publish).")
+            self.token = data["access_token"]
+            self.expires = time.time() + int(data.get("expires_in") or 86400)
+            return self.token
+
+    def creator(self) -> dict:
+        token = self.access_token()
+        try:
+            info = tiktok_api.query_creator_info(token)
+        except tiktok_api.TikTokError as exc:
+            if exc.code in RECONNECT_CODES:
+                with self.lock:
+                    self.token = None
+                raise TikTokUnavailable("permissao" if exc.code == "scope_not_authorized"
+                                        else "reconectar", str(exc)) from exc
+            if exc.code in BLOCKING_CODES:
+                raise TikTokUnavailable("bloqueado", str(exc)) from exc
+            raise TikTokUnavailable("erro", str(exc)) from exc
+        except requests.RequestException as exc:
+            raise TikTokUnavailable("erro", f"Nao consegui falar com o TikTok: {exc}") from exc
+        return info
+
+    def page_info(self) -> dict:
+        """O que a pagina precisa para montar a tela. A foto vai embutida (a
+        pagina so carrega imagem do proprio painel)."""
+        info = self.creator()
+        avatar = None
+        url = info.get("creator_avatar_url")
+        if url and url.startswith("https://"):
+            try:
+                resp = requests.get(url, timeout=10)
+                kind = resp.headers.get("Content-Type", "").split(";")[0]
+                if resp.ok and kind.startswith("image/") and len(resp.content) < 2_000_000:
+                    avatar = f"data:{kind};base64,{base64.b64encode(resp.content).decode()}"
+            except requests.RequestException:
+                pass  # sem foto a tela continua valida: o exigido e o apelido
+        return {
+            "apelido": info.get("creator_nickname") or "",
+            "usuario": info.get("creator_username") or "",
+            "avatar": avatar,
+            "privacidades": info.get("privacy_level_options") or [],
+            "comentario_desligado": bool(info.get("comment_disabled")),
+            "dueto_desligado": bool(info.get("duet_disabled")),
+            "costura_desligada": bool(info.get("stitch_disabled")),
+            "duracao_max": info.get("max_video_post_duration_sec"),
+        }
+
+    def post_choices(self, choices: dict, meta: dict) -> dict:
+        """Confere de novo, com a conta consultada agora, tudo que a pagina ja
+        conferiu: a regra e do TikTok e nao pode depender so do navegador."""
+        info = self.creator()
+        privacy = str(choices.get("privacidade") or "")
+        if privacy not in (info.get("privacy_level_options") or []):
+            raise ValueError("Escolha quem pode ver o video no TikTok.")
+        title = str(choices.get("legenda") or "").strip()
+        if not title:
+            raise ValueError("A legenda do TikTok esta vazia.")
+        if len(title.encode("utf-16-le")) // 2 > TITLE_MAX_UTF16:
+            raise ValueError(f"A legenda do TikTok passa de {TITLE_MAX_UTF16} caracteres.")
+        disclose = bool(choices.get("divulgacao"))
+        own_brand = disclose and bool(choices.get("sua_marca"))
+        branded = disclose and bool(choices.get("conteudo_de_marca"))
+        if disclose and not (own_brand or branded):
+            raise ValueError("Na divulgacao de conteudo comercial, marque 'Sua marca', "
+                             "'Conteudo de marca' ou os dois.")
+        if branded and privacy == "SELF_ONLY":
+            raise ValueError("Conteudo de marca nao pode ser publicado como 'Somente eu'.")
+        limit = info.get("max_video_post_duration_sec")
+        duration = meta.get("duracao_segundos")
+        if limit and duration and float(duration) > float(limit):
+            raise ValueError(f"O video tem {duration} s e esta conta aceita no maximo {limit} s.")
+        return {
+            "mode": "direct",
+            "title": title,
+            "privacy_level": privacy,
+            # interacao desligada no app da pessoa fica desligada aqui tambem
+            "disable_comment": not choices.get("comentario") or bool(info.get("comment_disabled")),
+            "disable_duet": not choices.get("dueto") or bool(info.get("duet_disabled")),
+            "disable_stitch": not choices.get("costura") or bool(info.get("stitch_disabled")),
+            "brand_organic_toggle": own_brand,
+            "brand_content_toggle": branded,
+            "is_aigc": bool(choices.get("ia", True)),
+        }
+
+
 class Panel:
     def __init__(self, env_file: str):
         self.env_file = env_file
         self.token = secrets.token_urlsafe(24)
         self.job: Job | None = None
         self.lock = threading.Lock()
+        self.tiktok = TikTokAccount(self)
 
     def env(self) -> dict:
         # relido a cada execucao: publicar no TikTok e os scripts de login
@@ -229,18 +368,33 @@ class Panel:
             "TEMA": topic.strip()[:300],
         })
 
-    def publish(self, run_name: str, platforms: list[str]) -> Job:
+    def publish(self, run_name: str, platforms: list[str], tiktok: dict | None = None) -> Job:
+        """`tiktok` e o que a pessoa escolheu na tela do TikTok: {"modo": "app"}
+        manda para a caixa de entrada do celular; {"modo": "direto", ...}
+        publica no perfil com as escolhas da tela."""
         path = run_path(run_name)
         if not path or not os.path.exists(os.path.join(path, "final.mp4")):
             raise ValueError("Video nao encontrado.")
-        if not os.path.exists(os.path.join(path, "metadata.json")):
+        meta = read_json(os.path.join(path, "metadata.json"))
+        if meta is None:
             raise ValueError("Essa pasta nao tem metadata.json.")
         chosen = [p for p in PLATFORMS if p in platforms]
         if not chosen:
             raise ValueError("Escolha pelo menos uma plataforma.")
+        extra = {}
+        if "tiktok" in chosen and tiktok:
+            if tiktok.get("modo") == "direto":
+                try:
+                    post = self.tiktok.post_choices(tiktok, meta)
+                    extra["TIKTOK_ACCESS_TOKEN"] = self.tiktok.access_token()
+                except TikTokUnavailable as exc:
+                    raise ValueError(str(exc)) from exc
+            else:
+                post = {"mode": "upload"}
+            extra["TIKTOK_POST"] = json.dumps(post, ensure_ascii=False)
         return self._start("publicar", run_name, [
             "--publicar", os.path.join("output", run_name), "--plataformas", ",".join(chosen),
-        ], {})
+        ], extra)
 
     def cancel(self) -> None:
         with self.lock:
@@ -279,6 +433,8 @@ class Panel:
             "plataformas": {
                 "tiktok": {"ativo": tiktok_cfg.get("enabled", True),
                            "modo": tiktok_cfg.get("mode", "direct"),
+                           "painel_direto": bool(tiktok_cfg.get("painel_direto", False)),
+                           "app_aprovado": bool(tiktok_cfg.get("app_aprovado", False)),
                            "credenciais": credentials["tiktok"]},
                 "youtube": {"ativo": youtube_cfg.get("enabled", True),
                             "privacidade": youtube_cfg.get("privacy_status", "public"),
@@ -435,9 +591,20 @@ class Handler(BaseHTTPRequestHandler):
                 platforms = body.get("plataformas") or []
                 if not isinstance(platforms, list):
                     raise ValueError("plataformas precisa ser uma lista.")
+                tiktok = body.get("tiktok")
+                if tiktok is not None and not isinstance(tiktok, dict):
+                    raise ValueError("tiktok precisa ser um objeto.")
                 job = self.panel.publish(str(body.get("execucao") or ""),
-                                         [str(p) for p in platforms])
+                                         [str(p) for p in platforms], tiktok)
                 return self._send_json({"job": job.snapshot()})
+            if path == "/api/tiktok/conta":
+                # POST e nao GET: consultar renova o token, e so a pagina do
+                # painel (que tem o token dela) pode pedir isso
+                try:
+                    return self._send_json({"ok": True, **self.panel.tiktok.page_info()})
+                except TikTokUnavailable as exc:
+                    return self._send_json({"ok": False, "motivo": exc.reason,
+                                            "mensagem": str(exc)})
             if path == "/api/cancelar":
                 self.panel.cancel()
                 return self._send_json({"ok": True})
