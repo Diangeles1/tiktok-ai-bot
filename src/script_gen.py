@@ -64,10 +64,19 @@ Crie UM video novo e ORIGINAL, narrado em {language}, sobre: {niche}
 Regras da narracao:
 - Somando todas as cenas, de {min_words} a {max_words} palavras (o video precisa
   passar de 1 minuto, requisito minimo de programas de monetizacao).
-- A primeira frase decide se a pessoa fica ou rola o feed. Ela tem que valer
-  sozinha, em menos de dois segundos de fala. Nao comece apresentando contexto
-  ("havia um homem chamado", "em uma terra distante", "muitos anos atras"):
-  isso e o jeito mais rapido de perder o espectador.
+- A primeira frase decide se a pessoa fica ou rola o feed, e hoje e onde o
+  canal perde publico (medido: 92% saem nos primeiros segundos). Ela tem que
+  valer sozinha, em menos de dois segundos de fala. Siga as quatro regras:
+  1. NAO conte o desfecho nem o julgamento final da historia. "Lazaro foi levado
+     ao seio de Abraao enquanto o rico sofria" entrega tudo e tira o motivo de
+     ficar. Mostre a situacao ANTES da virada.
+  2. NAO comece apresentando contexto ("havia um homem chamado", "em uma terra
+     distante", "muitos anos atras").
+  3. Palavras do dia a dia. Nada de "jaz", "outrora", "eis que", "escuridao
+     eterna". Escreva como se contasse para um amigo no portao de casa.
+  4. Termine deixando uma pergunta no ar, sem fazer a pergunta. Exemplo bom:
+     "Um mendigo dormia no portao do homem mais rico da cidade. Nenhum dos dois
+     imaginava quem seria lembrado depois."
 - Depois da primeira frase, e antes de comecar a historia, diga em UMA frase
   curta de onde ela vem, como se fala em voz alta: "Esta em Lucas 18, versiculos
   9 a 14." Tem que ser exatamente a mesma referencia do campo "passagem".
@@ -123,6 +132,14 @@ Regras da capa (campo "thumbnail", o ultimo do JSON):
   (recusar perdao nao e trair, duvidar nao e negar) e nao atribua a ninguem
   culpa, motivo ou resultado que o texto nao registra.
 
+Regras do titulo (campo "caption", que vira o titulo do video):
+- Ate 70 caracteres, com o NOME de quem vive a historia e o conflito concreto.
+  "O rico ignorou Lazaro. Depois foi tarde" funciona; "Quando o luxo encontra a
+  pobreza, o destino revela sua justica" nao diz quem nem o que aconteceu.
+- Nunca comece com "Quando", "Descubra", "A historia de" ou "Voce sabia".
+- Sem ponto final, sem emoji, sem hashtag e sem caixa alta.
+- Nao entregue o desfecho: o titulo promete a historia, nao o fim dela.
+
 Regras das hashtags (campo "hashtags"):
 - Duas, do mais especifico para o menos: o personagem principal e o tema da
   historia, sem acento (ex.: #Moises, #MarVermelho).
@@ -133,7 +150,7 @@ Responda APENAS com um JSON valido no formato:
 {{
   "topic": "assunto especifico do video de hoje",
   "passagem": "livro, capitulo e versiculos da historia contada, ou a fonte da tradicao",
-  "caption": "legenda curta e chamativa (max 150 caracteres)",
+  "caption": "titulo com nome e conflito, ate 70 caracteres",
   "hashtags": ["#Personagem", "#Tema"],
   "scenes": [
     {{"narration": "trecho narrado desta cena", "visual": "image prompt in English"}}
@@ -282,6 +299,7 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
 
     enforce_wide_framing(scenes)
     warn_repeated_sentences(scenes)
+    warn_distant_words(scenes)
     return data
 
 
@@ -297,6 +315,26 @@ _CLOSEUP_RE = re.compile(
 _BODY_RE = re.compile(
     r"\b(?:hands?|feet|foot|eyes?|fingers?|arms?|legs?|skin|lips?|mouth|"
     r"palms?|shoulders?|forearms?)\b", re.IGNORECASE)
+
+
+# palavras de livro antigo: soam distantes no formato curto e o publico rola.
+# So aviso, sem reescrever: trocar palavra no automatico ja quebrou sentido antes.
+PALAVRAS_DISTANTES = ("jaz", "jazia", "jaziam", "outrora", "eis que", "porventura",
+                      "acaso", "sobremaneira", "deveras", "escuridao eterna",
+                      "escuridão eterna", "tormento eterno")
+
+
+def warn_distant_words(scenes: list[dict]) -> list[str]:
+    """Avisa quando a abertura usa palavra de linguagem antiga."""
+    achadas = []
+    texto = " ".join(s.get("narration", "") for s in scenes[:2]).lower()
+    for palavra in PALAVRAS_DISTANTES:
+        if re.search(rf"{re.escape(palavra)}", texto):
+            achadas.append(palavra)
+    for palavra in achadas:
+        print(f"  [script] AVISO: a abertura usa \"{palavra}\", que soa distante "
+              f"no formato curto.")
+    return achadas
 
 
 def warn_repeated_sentences(scenes: list[dict]) -> list[str]:

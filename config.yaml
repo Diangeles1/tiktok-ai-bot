@@ -187,7 +187,9 @@ script:
     - name: "pergunta"
       instruction: >
         Abra com uma pergunta direta ao espectador que ele nao consiga responder
-        sem assistir ao video inteiro.
+        sem assistir ao video inteiro. A pergunta NAO pode entregar o desfecho:
+        "voce ja imaginou perder tudo e ainda ser recebido com festa?" ja conta o
+        fim e nao serve.
     - name: "meio-da-acao"
       instruction: >
         Comece no instante de maior tensao da historia, sem nenhuma apresentacao.
@@ -196,10 +198,6 @@ script:
       instruction: >
         Abra citando um detalhe concreto e curioso da historia, algo especifico
         e inesperado que faca a pessoa querer entender de onde aquilo vem.
-    - name: "final-primeiro"
-      instruction: >
-        Abra revelando o resultado final da historia e depois volte para contar
-        como se chegou ate ali.
 
   # Fora da rotacao: o codigo so le "hooks". Em 16 geracoes de teste, com tres
   # versoes diferentes da instrucao, este gancho distorceu a passagem com
@@ -208,6 +206,16 @@ script:
   # fidelidade. Para reativar, mova de volta para "hooks" e teste de novo,
   # de preferencia com outro modelo.
   ganchos_desativados:
+    # Tirado da rotacao em 20/09/2026, com dado: os videos que abriam
+    # entregando o final sao todos deste gancho ("Ele terminou na escuridao
+    # eterna...", "Davi poupou a vida de Saul, mostrando que..."), e o de 422
+    # views, que usou ele, teve 92,4% de saida nos primeiros segundos. Em
+    # formato curto, contar o fim na primeira frase tira o motivo de ficar.
+    # Para reativar, teste contra os outros ganchos e compare a retencao.
+    - name: "final-primeiro"
+      instruction: >
+        Abra revelando o resultado final da historia e depois volte para contar
+        como se chegou ate ali.
     - name: "contraintuitivo"
       # Historico: pedir uma afirmacao que "soasse improvavel" fez o modelo
       # distorcer a passagem em 7 de 10 testes (milagre inventado, fome negada,
