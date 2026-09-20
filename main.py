@@ -45,6 +45,15 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _horario_utc(cfg: dict, dia: datetime.date, slot: int) -> datetime.datetime | None:
+    """Momento exato da publicacao, em UTC."""
+    hours = cfg.get("posting_hours_utc", [])
+    if not hours or slot >= len(hours):
+        return None
+    return datetime.datetime.combine(dia, datetime.time(hour=hours[slot] % 24),
+                                     tzinfo=datetime.timezone.utc)
+
+
 def _horario_brasilia(cfg: dict, dia: datetime.date, slot: int) -> str | None:
     """Horario da publicacao em Brasilia (UTC-3), no formato YYYY-MM-DD HH:MM."""
     hours = cfg.get("posting_hours_utc", [])
@@ -296,14 +305,28 @@ def main() -> None:
     # no horario automatico so entram as plataformas com automatico: true. O
     # TikTok fica de fora enquanto o app nao for aprovado: sai pelo painel
     auto = [p for p in REQUIRED_ENV if cfg.get(p, {}).get("automatico", True)]
-    results = publish_run(run_dir, cfg, auto)
+    # o GitHub Actions comeca o agendamento com atraso (de minutos a horas), e
+    # por isso o workflow roda ANTES da hora: aqui o video sai com a hora
+    # marcada, e quem cumpre o horario e o YouTube
+    publish_at = None
+    if cfg.get("youtube", {}).get("agendar", False):
+        quando = _horario_utc(cfg, dia, slot)
+        agora = datetime.datetime.now(datetime.timezone.utc)
+        if quando and quando > agora + datetime.timedelta(minutes=5):
+            publish_at = quando.strftime("%Y-%m-%dT%H:%M:%SZ")
+            print(f"  Publicacao marcada para {quando:%H:%M} UTC "
+                  f"({_horario_brasilia(cfg, dia, slot)} em Brasilia)")
+        else:
+            print("  A execucao passou da hora marcada: publicando agora.")
+    results = publish_run(run_dir, cfg, auto, publish_at=publish_at)
     # sem isso a execucao termina verde com a publicacao falhando, e ninguem
     # fica sabendo ate olhar o canal
     if any(not outcome["ok"] for outcome in results.values()):
         sys.exit(1)
 
 
-def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> dict:
+def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None,
+                publish_at: str | None = None) -> dict:
     """Publica um video ja gerado, lendo tudo do metadata.json da pasta.
 
     Separado da geracao para o painel local poder mostrar o video antes e so
@@ -345,7 +368,7 @@ def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> 
                 description = (meta.get("descricao_youtube")
                                or f"{meta['titulo_youtube']}\n\n{tag_line}".strip())
                 outcome = _post_to_youtube(video_path, meta["titulo_youtube"], description,
-                                           platform_cfg, thumbnail_path)
+                                           platform_cfg, thumbnail_path, publish_at)
             results[platform] = {"ok": True, **outcome}
         except Exception as exc:
             print(f"  [{platform}] FALHOU: {exc}")
@@ -406,8 +429,10 @@ def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict,
 
 
 def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict,
-                      thumbnail_path: str | None = None) -> dict:
-    print("  [youtube] publicando...")
+                      thumbnail_path: str | None = None,
+                      publish_at: str | None = None) -> dict:
+    print("  [youtube] publicando..." if not publish_at
+          else f"  [youtube] enviando com publicacao marcada para {publish_at}...")
     result = youtube_api.upload_short(
         client_id=os.environ["YOUTUBE_CLIENT_ID"],
         client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
@@ -419,10 +444,17 @@ def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg:
         privacy_status=youtube_cfg.get("privacy_status", "public"),
         made_for_kids=youtube_cfg.get("made_for_kids", False),
         thumbnail_path=thumbnail_path,
+        publish_at=publish_at,
     )
     url = f"https://youtube.com/shorts/{result['id']}"
-    print(f"  [youtube] video publicado: {url}")
-    return {"id": result["id"], "url": url}
+    if publish_at:
+        print(f"  [youtube] video no ar as {publish_at} (privado ate lá): {url}")
+    else:
+        print(f"  [youtube] video publicado: {url}")
+    outcome = {"id": result["id"], "url": url}
+    if publish_at:
+        outcome["publicar_em"] = publish_at
+    return outcome
 
 
 def _cli() -> None:

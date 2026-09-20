@@ -39,8 +39,14 @@ def upload_short(client_id: str, client_secret: str, refresh_token: str,
                   video_path: str, title: str, description: str,
                   category_id: str = "24", privacy_status: str = "public",
                   made_for_kids: bool = False,
-                  thumbnail_path: str | None = None) -> dict:
-    """Envia o video como YouTube Short. Retorna o recurso 'video' criado."""
+                  thumbnail_path: str | None = None,
+                  publish_at: str | None = None) -> dict:
+    """Envia o video como YouTube Short. Retorna o recurso 'video' criado.
+
+    `publish_at` (RFC3339 em UTC, ex.: 2026-09-20T09:00:00Z) marca a hora exata
+    de publicar: o video sobe privado e o YouTube o torna publico na hora. E o
+    que garante o horario mesmo quando o GitHub Actions atrasa a execucao, que
+    e o normal dele."""
     youtube = _build_client(client_id, client_secret, refresh_token)
 
     # titulo tem limite de 100 caracteres na API do YouTube
@@ -55,10 +61,13 @@ def upload_short(client_id: str, client_secret: str, refresh_token: str,
             "categoryId": category_id,
         },
         "status": {
-            "privacyStatus": privacy_status,
+            # com hora marcada o YouTube exige que o video suba privado
+            "privacyStatus": "private" if publish_at else privacy_status,
             "selfDeclaredMadeForKids": made_for_kids,
         },
     }
+    if publish_at:
+        body["status"]["publishAt"] = publish_at
 
     media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
