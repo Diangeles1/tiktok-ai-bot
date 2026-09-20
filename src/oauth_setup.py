@@ -98,7 +98,14 @@ def main() -> None:
     # Com --sem-terminal nem Enter e preciso: o script espera a copia sozinho
     sem_terminal = "--sem-terminal" in sys.argv
     is_key = lambda v: v.isalnum() and 10 <= len(v) <= 40
-    if sem_terminal:
+    salvas = (credentials.current("TIKTOK_CLIENT_KEY"), credentials.current("TIKTOK_CLIENT_SECRET"))
+    # reconectar (para ganhar uma permissao nova, por exemplo) nao precisa das
+    # chaves de novo: elas ja estao no .env. --trocar-chaves pede outra vez
+    if all(salvas) and "--trocar-chaves" not in sys.argv:
+        client_key, client_secret = salvas
+        print("Usando o Client key e o Client secret ja salvos no .env.")
+        print("  (para trocar, rode com --trocar-chaves)")
+    elif sem_terminal:
         client_key, client_secret = _wait_credentials()
     else:
         client_key = credentials.ask_copied(
