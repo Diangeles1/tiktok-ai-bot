@@ -1,0 +1,4 @@
+Grave aqui 3 ou 4 audios curtos (5 a 8 segundos) fechando o video, do tipo
+"Gostou? Se inscreve no canal". O bot sorteia um a cada video.
+
+Formatos aceitos: mp3, m4a (o que sai do celular) ou wav.

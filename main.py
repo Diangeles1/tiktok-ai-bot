@@ -220,6 +220,14 @@ def main() -> None:
     if brand.get("watermark_enabled", True) and brand.get("handle") in (None, "", "@canal"):
         print("  AVISO: branding.handle ainda e o placeholder. Troque pelo @ real "
               "do canal no config.yaml antes de publicar.")
+    # a voz do dono fechando o video: sorteada entre as gravacoes de assets/voz
+    assinatura = (sfx.pick_random_assinatura()
+                  if sfx_cfg.get("assinatura_enabled", True) else None)
+    if assinatura:
+        print(f"  Assinatura de voz: {os.path.basename(assinatura)}")
+    elif sfx_cfg.get("assinatura_enabled", True):
+        print("  AVISO: assets/voz esta vazia. Grave o fecho do canal na sua voz: "
+              "e a camada humana que o YouTube cobra de quem produz com IA.")
     video.build_video(
         scenes, width, height, cfg["video"]["fps"], video_path,
         words_per_chunk=captions_cfg.get("words_per_chunk", 3),
@@ -227,6 +235,8 @@ def main() -> None:
         tmp_dir=os.path.join(run_dir, "_captions"),
         laugh_path=sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None,
         laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
+        assinatura_path=assinatura,
+        assinatura_gap=sfx_cfg.get("assinatura_gap_seconds", 0.45),
         caption_bottom_margin=captions_cfg.get("bottom_margin", 420),
         music_path=sfx.pick_random_music() if sfx_cfg.get("music_enabled", True) else None,
         music_volume=sfx_cfg.get("music_volume", 0.10),
