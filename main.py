@@ -282,6 +282,9 @@ def main() -> None:
             # referencia e o jeito rapido de pegar distorcao antes do publico
             "passagem": script.get("passagem"),
             "primeira_frase": scenes[0]["narration"],
+            # o texto narrado, cena por cena: e por aqui que se confere uma
+            # frase repetida ou um trecho estranho depois de assistir
+            "narracao": [s["narration"] for s in scenes],
             "duracao_segundos": round(total, 1),
             "hashtags": tags,
             "titulo_youtube": youtube_title,
