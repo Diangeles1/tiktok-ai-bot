@@ -573,7 +573,9 @@ function renderPublicacao(run) {
       res.append(h('div', { class: 'res ok' }, `Publicado no YouTube em ${quandoIso(t.quando)}. `,
         h('a', { href: t.url, target: '_blank', rel: 'noopener', text: 'Abrir o Short' })));
     } else if (t.ok) {
-      res.append(h('div', { class: 'res ok', text: t.modo === 'site'
+      res.append(h('div', { class: 'res ok', text: t.modo === 'robo'
+        ? `Postado no TikTok pelo robô em ${quandoIso(t.quando)}${t.rotulo_ia === false ? ' (sem o rótulo de IA)' : ''}.`
+        : t.modo === 'site'
         ? `Postado pelo site do TikTok em ${quandoIso(t.quando)}.`
         : t.modo === 'upload'
         ? `Enviado para a caixa de entrada do TikTok em ${quandoIso(t.quando)}. Abra o app no celular para finalizar a postagem.`
