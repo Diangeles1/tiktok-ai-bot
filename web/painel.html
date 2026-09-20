@@ -243,6 +243,8 @@
   .nota code { font-size: 12.5px; overflow-wrap: anywhere; }
   .declara { font-size: 13px; color: var(--muted); margin: 0; }
   button.mini { padding: 4px 10px; font-size: 12.5px; }
+  .lote { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .lote select { width: auto; padding: 8px 10px; }
   ol.passos { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
   .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
   .card-head h2 { margin: 0; }
@@ -278,6 +280,15 @@
       <div class="row">
         <button class="primary" id="btn-gerar">Gerar vídeo</button>
         <span class="hint">Leva alguns minutos. Nada é publicado sem você aprovar.</span>
+      </div>
+      <div class="row lote">
+        <button id="btn-lote">Gerar lote</button>
+        <select id="lote-dias" aria-label="Dias do lote">
+          <option value="1">1 dia (3 vídeos)</option>
+          <option value="3" selected>3 dias (9 vídeos)</option>
+          <option value="7">7 dias (21 vídeos)</option>
+        </select>
+        <span class="hint" id="lote-msg">Gera os vídeos dos próximos horários de uma vez, para você agendar tudo junto no TikTok.</span>
       </div>
     </section>
 
@@ -443,6 +454,8 @@ function renderEstado(e) {
     for (const t of e.temas) grupo.append(h('option', { value: t, text: t }));
     sel.append(grupo, h('option', { value: OUTRO, text: 'Outro tema...' }));
   }
+  renderLote(e.lote);
+
   const partes = [];
   if (e.proximo.gancho) partes.push(`Gancho: ${e.proximo.gancho}`);
   if (e.proximo.arco) partes.push(`Arco: ${e.proximo.arco}`);
@@ -451,6 +464,55 @@ function renderEstado(e) {
     texto += `. O tema da vez é o mesmo que a publicação automática das ${e.proximo.horario_brasilia}h vai usar.`;
   }
   $('rotacao').textContent = texto;
+}
+
+function renderLote(lote) {
+  const msg = $('lote-msg');
+  const btn = $('btn-lote');
+  if (!lote) {
+    btn.disabled = rodando();
+    return;
+  }
+  const feitos = lote.feitos + lote.erros;
+  if (lote.ativo) {
+    btn.disabled = true;
+    msg.textContent = `Lote em andamento: ${feitos} de ${lote.total} prontos.`
+      + (lote.erros ? ` ${lote.erros} falharam.` : '');
+  } else {
+    btn.disabled = rodando();
+    msg.textContent = `Último lote: ${lote.feitos} de ${lote.total} gerados`
+      + (lote.erros ? `, ${lote.erros} com erro.` : '.');
+  }
+}
+
+async function atualizarEstado() {
+  try { renderEstado(await api('/api/estado')); } catch (_) { /* o poll seguinte tenta de novo */ }
+}
+
+$('btn-lote').addEventListener('click', async () => {
+  const dias = $('lote-dias').value;
+  $('btn-lote').disabled = true;
+  try {
+    const { lote } = await api('/api/lote', { dias: Number(dias) });
+    renderLote(lote);
+    // o lote dispara uma execucao atras da outra: o acompanhamento normal
+    // mostra cada uma, e o estado traz o progresso do conjunto
+    acompanharLote();
+  } catch (err) {
+    alert(err.message);
+    $('btn-lote').disabled = false;
+  }
+});
+
+async function acompanharLote() {
+  while (true) {
+    await sleep(3000);
+    await atualizarEstado();
+    const { job } = await api('/api/job?desde=0');
+    if (job && (!st.job || st.job.id !== job.id)) { zerarJob(job); renderJob(job); acompanhar(); }
+    if (!st.estado || !st.estado.lote || !st.estado.lote.ativo) break;
+  }
+  await carregarExecucoes();
 }
 
 $('tema').addEventListener('change', () => {
@@ -516,6 +578,7 @@ function abrirExecucao(nome) {
   $('v-quando').textContent = `Gerado em ${quando(run.modificado)}${run.automatico ? ' pelo horário automático' : ''}`;
   $('v-titulo').textContent = m.titulo_youtube || m.tema || nome;
   const itens = [
+    ['Agendar para', m.agendar_para ? `${m.agendar_para} (horário de Brasília)` : null],
     ['Tema', m.tema],
     ['Passagem', m.passagem || 'não informada'],
     ['Gancho', m.gancho],

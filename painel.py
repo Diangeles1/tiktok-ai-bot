@@ -348,6 +348,7 @@ class Panel:
         self.lock = threading.Lock()
         self.tiktok = TikTokAccount(self)
         self.fetch_lock = threading.Lock()
+        self.batch: dict | None = None
 
     def env(self) -> dict:
         # relido a cada execucao: publicar no TikTok e os scripts de login
@@ -370,6 +371,69 @@ class Panel:
             "RUN_DIR": os.path.join("output", name),
             "TEMA": topic.strip()[:300],
         })
+
+    def _slots_futuros(self, days: int) -> list[tuple[datetime.date, int]]:
+        """Os horarios dos proximos dias que ainda nao passaram.
+
+        O TikTok Studio agenda com no minimo 20 minutos de antecedencia e no
+        maximo 10 dias, entao o lote segue essa janela."""
+        hours = load_config().get("posting_hours_utc", []) or [0]
+        agora = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=30)
+        alvos = []
+        for dia_offset in range(max(1, min(days, 10))):
+            dia = datetime.date.today() + datetime.timedelta(days=dia_offset)
+            for slot, hora in enumerate(hours):
+                quando = datetime.datetime.combine(
+                    dia, datetime.time(hour=hora % 24), tzinfo=datetime.timezone.utc)
+                if quando > agora:
+                    alvos.append((dia, slot))
+        return alvos
+
+    def start_batch(self, days: int) -> dict:
+        """Gera de uma vez os videos dos proximos dias, um depois do outro.
+
+        Cada um sai com o tema, o gancho e o arco daquele horario, os mesmos
+        que o horario automatico usaria, e com o horario de agendamento no
+        metadata para voce marcar no TikTok Studio."""
+        with self.lock:
+            if self.batch and self.batch.get("ativo"):
+                raise Busy("Ja tem um lote em andamento.")
+            if self.job and self.job.status == "rodando":
+                raise Busy("Ja tem uma execucao em andamento. Espere terminar ou cancele.")
+            alvos = self._slots_futuros(days)
+            if not alvos:
+                raise ValueError("Nenhum horario futuro nos proximos dias.")
+            self.batch = {"ativo": True, "total": len(alvos), "feitos": 0, "erros": 0,
+                          "cancelado": False}
+        threading.Thread(target=self._run_batch, args=(alvos,), daemon=True).start()
+        return dict(self.batch)
+
+    def _run_batch(self, alvos: list[tuple[datetime.date, int]]) -> None:
+        for dia, slot in alvos:
+            if self.batch.get("cancelado"):
+                break
+            name = f"lote_{dia.isoformat()}_{slot + 1}"
+            if os.path.isdir(os.path.join(OUTPUT_DIR, name)):
+                self.batch["feitos"] += 1   # ja gerado antes, nao refaz
+                continue
+            try:
+                job = self._start("gerar", name, [], {
+                    "DRY_RUN": "true",
+                    "RUN_DIR": os.path.join("output", name),
+                    "DATA_ALVO": dia.isoformat(),
+                    "SLOT_ALVO": str(slot),
+                })
+            except Busy:
+                break
+            while job.status == "rodando":
+                time.sleep(2)
+            if job.status == "ok":
+                self.batch["feitos"] += 1
+            else:
+                self.batch["erros"] += 1
+                if job.status == "cancelado":
+                    break
+        self.batch["ativo"] = False
 
     def publish(self, run_name: str, platforms: list[str], tiktok: dict | None = None) -> Job:
         """`tiktok` e o que a pessoa escolheu na tela do TikTok: {"modo": "app"}
@@ -401,6 +465,8 @@ class Panel:
 
     def cancel(self) -> None:
         with self.lock:
+            if self.batch:
+                self.batch["cancelado"] = True
             if self.job:
                 self.job.cancel()
 
@@ -464,6 +530,7 @@ class Panel:
                 "horario_brasilia": ((hours[slot] + BRASILIA_UTC_OFFSET) % 24) if hours else None,
             },
             "temas": script_cfg.get("topics", []),
+            "lote": self.batch,
             "plataformas": {
                 "tiktok": {"ativo": tiktok_cfg.get("enabled", True),
                            "modo": tiktok_cfg.get("mode", "direct"),
@@ -621,6 +688,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/gerar":
                 job = self.panel.generate(str(body.get("tema") or ""))
                 return self._send_json({"job": job.snapshot()})
+            if path == "/api/lote":
+                try:
+                    dias = int(body.get("dias") or 3)
+                except (TypeError, ValueError):
+                    raise ValueError("dias precisa ser um numero.")
+                return self._send_json({"lote": self.panel.start_batch(dias)})
             if path == "/api/publicar":
                 platforms = body.get("plataformas") or []
                 if not isinstance(platforms, list):

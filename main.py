@@ -24,6 +24,7 @@ from src import (character, hashtags, scenes as scenes_mod, script_gen,
 from src.env_file import ENV_FILE
 
 OUTPUT_DIR = "output"
+BRASILIA_UTC_OFFSET = -3
 
 # o que cada plataforma precisa para publicar. Conferido antes de qualquer
 # chamada de rede, para faltar chave virar uma mensagem clara e nao um KeyError
@@ -44,6 +45,17 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _horario_brasilia(cfg: dict, dia: datetime.date, slot: int) -> str | None:
+    """Horario da publicacao em Brasilia (UTC-3), no formato YYYY-MM-DD HH:MM."""
+    hours = cfg.get("posting_hours_utc", [])
+    if not hours or slot >= len(hours):
+        return None
+    quando = (datetime.datetime.combine(dia, datetime.time(hour=hours[slot] % 24),
+                                        tzinfo=datetime.timezone.utc)
+              + datetime.timedelta(hours=BRASILIA_UTC_OFFSET))
+    return quando.strftime("%Y-%m-%d %H:%M")
+
+
 def _phase(cfg: dict) -> tuple[str, dict]:
     """Devolve o nome da fase ativa e os parametros dela.
 
@@ -57,24 +69,43 @@ def _phase(cfg: dict) -> tuple[str, dict]:
     return name, {**fallback, **cfg.get("fases", {}).get(name, {})}
 
 
+def _alvo(cfg: dict) -> tuple[datetime.date, int]:
+    """Dia e publicacao que esta sendo gerada.
+
+    Por padrao e agora: o dia de hoje e o horario mais proximo. O painel, ao
+    gerar um lote para os proximos dias, passa DATA_ALVO e SLOT_ALVO, e assim
+    cada video do lote sai com o tema, o gancho e o arco daquele horario,
+    iguais aos que o horario automatico usaria."""
+    hours = cfg.get("posting_hours_utc", [])
+    try:
+        dia = datetime.date.fromisoformat(os.environ["DATA_ALVO"])
+    except (KeyError, ValueError):
+        dia = datetime.date.today()
+    try:
+        slot = max(0, min(int(os.environ["SLOT_ALVO"]), max(0, len(hours) - 1)))
+    except (KeyError, ValueError):
+        slot = script_gen.current_slot(hours)
+    return dia, slot
+
+
 def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple[dict, list[dict]]:
     script_cfg = cfg.get("script", {})
     phase_name, phase = _phase(cfg)
     hours = cfg.get("posting_hours_utc", [])
-    slot = script_gen.current_slot(hours)
+    dia, slot = _alvo(cfg)
     slot_count = max(1, len(hours))
     # o painel local deixa escolher o tema na mao; sem isso vale a rotacao
     seed_topic = os.environ.get("TEMA", "").strip() or script_gen.topic_of_the_day(
-        script_cfg.get("topics", []), slot_index=slot, slot_count=slot_count,
+        script_cfg.get("topics", []), today=dia, slot_index=slot, slot_count=slot_count,
     )
     hook = script_gen.hook_of_the_slot(
-        script_cfg.get("hooks", []), slot_index=slot, slot_count=slot_count,
+        script_cfg.get("hooks", []), today=dia, slot_index=slot, slot_count=slot_count,
     )
     # o arco define a ESTRUTURA da historia, o gancho define so a primeira
     # frase. Girar os dois em listas de tamanhos coprimos faz o mesmo tema
     # voltar meses depois contado de outro jeito.
     arc = script_gen.rotate_by_slot(
-        script_cfg.get("arcs", []), slot_index=slot, slot_count=slot_count,
+        script_cfg.get("arcs", []), today=dia, slot_index=slot, slot_count=slot_count,
     )
     print(f"[1/5] Gerando roteiro em cenas (publicacao {slot + 1} de {slot_count}, "
           f"tema: {seed_topic or 'livre'}, gancho: {hook['name'] if hook else 'livre'}, "
@@ -134,10 +165,11 @@ def _build_character_mode(cfg: dict, run_dir: str, width: int, height: int) -> t
 
 def main() -> None:
     cfg = load_config()
-    today = datetime.date.today().isoformat()
+    dia, slot = _alvo(cfg)
+    today = dia.isoformat()
     # o slot entra no nome da pasta porque com mais de uma publicacao por dia as
     # execucoes gravariam uma sobre a outra
-    slot_suffix = script_gen.current_slot(cfg.get("posting_hours_utc", [])) + 1
+    slot_suffix = slot + 1
     # o painel local passa uma pasta propria para cada rodada, senao gerar duas
     # vezes no mesmo horario gravaria um video por cima do outro
     run_dir = os.environ.get("RUN_DIR") or os.path.join(OUTPUT_DIR, f"{today}_{slot_suffix}")
@@ -230,6 +262,9 @@ def main() -> None:
         json.dump({
             "data": today,
             "publicacao": slot_suffix,
+            # quando este video deve ir ao ar, no horario de Brasilia: e o que
+            # o painel mostra para agendar no TikTok Studio
+            "agendar_para": _horario_brasilia(cfg, dia, slot),
             "gancho": script.get("_hook"),
             "arco": script.get("_arc"),
             "fase": phase_name,
