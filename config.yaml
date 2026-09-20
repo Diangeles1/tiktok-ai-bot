@@ -139,10 +139,13 @@ fases:
     min_scenes: 5
     max_scenes: 8
     min_duration_seconds: 0       # nao ha minimo nesta fase
+    # Quem pede a inscricao e a voz do dono, gravada, no fim do video (ver
+    # sfx.assinatura). Pedir tambem na narracao soaria dobrado, entao aqui a
+    # ultima cena so deixa o gancho para a proxima historia.
     cta: >
-      A ULTIMA cena fecha pedindo, em uma frase, que a pessoa siga o canal para
-      ouvir a proxima historia. Nesta fase o video existe para trazer
-      seguidor, entao o pedido e direto, mas no tom reverente da narracao.
+      A ULTIMA cena fecha com uma frase que deixa vontade da proxima historia,
+      nascida do assunto de hoje. NAO peca inscricao, curtida nem
+      compartilhamento: isso e dito depois, por outra voz.
   monetizacao:
     # Calibrado com medicao real: a voz Antonio le 2,42 palavras por segundo no
     # ritmo padrao, o que dava 64s com 155 palavras. Com tts_rate em +8% a
@@ -400,6 +403,12 @@ thumbnail:
 sfx:
   laugh_enabled: false     # risada de grupo no fim (assets/laughs/*.mp3). Combina com humor, nao com historia seria
   laugh_gap_seconds: 0.4   # pausa entre o fim da narracao e o inicio da risada
+  # Assinatura de voz: gravacoes suas fechando o video ("gostou? se inscreve no
+  # canal"), sorteadas a cada video, em assets/voz/. Alem de assinatura do
+  # canal, e a camada humana que a politica de conteudo nao autentico do
+  # YouTube cobra de quem produz com IA. Pasta vazia = sem assinatura.
+  assinatura_enabled: true
+  assinatura_gap_seconds: 0.45   # pausa entre o fim da narracao e a sua voz
   music_enabled: true      # trilha de fundo sorteada de assets/music/*.mp3 (pasta vazia = sem musica)
   music_volume: 0.10       # volume da trilha por baixo da narracao (0 a 1)
 

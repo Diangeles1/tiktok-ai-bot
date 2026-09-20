@@ -109,11 +109,16 @@ def _pop(clip, canvas_w: int, canvas_h: int, center_y: float,
 
 def _build_audio(scenes: list[dict], narration_end: float, total: float,
                   laugh_path: str | None, laugh_gap: float,
-                  music_path: str | None, music_volume: float) -> tuple:
+                  music_path: str | None, music_volume: float,
+                  assinatura_path: str | None = None,
+                  assinatura_gap: float = 0.45) -> tuple:
     tracks = [AudioFileClip(s["audio"]).set_start(s["start"]) for s in scenes]
 
     if laugh_path:
         tracks.append(AudioFileClip(laugh_path).set_start(narration_end + laugh_gap))
+
+    if assinatura_path:
+        tracks.append(AudioFileClip(assinatura_path).set_start(narration_end + assinatura_gap))
 
     if music_path:
         music = AudioFileClip(music_path).volumex(music_volume)
@@ -131,6 +136,7 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
                  words_per_chunk: int = 3, zoom_effect: bool = True,
                  tmp_dir: str = "output/_captions",
                  laugh_path: str | None = None, laugh_gap: float = 0.4,
+                 assinatura_path: str | None = None, assinatura_gap: float = 0.45,
                  caption_bottom_margin: int = 420,
                  music_path: str | None = None, music_volume: float = 0.10,
                  crossfade: float = 0.6, color_boost: float = 1.0,
@@ -143,6 +149,10 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
     if laugh_path:
         with AudioFileClip(laugh_path) as laugh:
             total = narration_end + laugh_gap + laugh.duration
+    if assinatura_path:
+        # a voz do dono fecha o video: o tempo do video cresce para caber ela
+        with AudioFileClip(assinatura_path) as assinatura:
+            total = max(total, narration_end + assinatura_gap + assinatura.duration)
 
     scene_clips = []
     for i, scene in enumerate(scenes):
@@ -215,7 +225,8 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
             )
 
     audio, audio_tracks = _build_audio(scenes, narration_end, total,
-                                        laugh_path, laugh_gap, music_path, music_volume)
+                                        laugh_path, laugh_gap, music_path, music_volume,
+                                        assinatura_path, assinatura_gap)
 
     final = CompositeVideoClip(scene_clips + caption_clips + watermark_clips,
                                 size=(width, height))
