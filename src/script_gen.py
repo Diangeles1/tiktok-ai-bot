@@ -329,7 +329,7 @@ def warn_distant_words(scenes: list[dict]) -> list[str]:
     achadas = []
     texto = " ".join(s.get("narration", "") for s in scenes[:2]).lower()
     for palavra in PALAVRAS_DISTANTES:
-        if re.search(rf"{re.escape(palavra)}", texto):
+        if re.search(r"\b" + re.escape(palavra) + r"\b", texto):
             achadas.append(palavra)
     for palavra in achadas:
         print(f"  [script] AVISO: a abertura usa \"{palavra}\", que soa distante "
