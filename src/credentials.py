@@ -15,6 +15,7 @@ from src.env_file import ENV_FILE, read_env_file, update_env_file
 # os mesmos nomes que .github/workflows/daily-post.yml le dos Secrets
 WORKFLOW_SECRETS = (
     "GROQ_API_KEY",
+    "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN",
     "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_REFRESH_TOKEN",
     "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN",
     "GH_PAT",

@@ -68,6 +68,9 @@ Regras da narracao:
   sozinha, em menos de dois segundos de fala. Nao comece apresentando contexto
   ("havia um homem chamado", "em uma terra distante", "muitos anos atras"):
   isso e o jeito mais rapido de perder o espectador.
+- Depois da primeira frase, e antes de comecar a historia, diga em UMA frase
+  curta de onde ela vem, como se fala em voz alta: "Esta em Lucas 18, versiculos
+  9 a 14." Tem que ser exatamente a mesma referencia do campo "passagem".
 - Final que deixe a pessoa querendo o proximo video, sem parecer propaganda.
 - Antes de escrever, identifique de onde a historia vem: livro, capitulo e
   versiculos da Biblia, ou a fonte da tradicao no caso de santo. Registre no
@@ -88,19 +91,24 @@ Regras das cenas:
   celular, jornal): o gerador nao desenha texto legivel e a cena sai borrada.
   Mostre a mesma ideia por outro caminho, por exemplo uma porta fechada em vez de
   uma placa de "fechado".
-- PROIBIDO enquadramento fechado. O campo "visual" NUNCA pode comecar com nem
-  conter "close-up", "closeup", "extreme close", "macro shot" ou "detail shot",
-  e NUNCA pode ter parte do corpo como assunto (hands, feet, foot, eyes, face,
-  fingers, arms, legs, skin, lips, mouth). Nesse gerador o enquadramento fechado
-  devolve um rosto aleatorio sem nenhuma relacao com a cena, e o video quebra.
-  Todo "visual" comeca por "wide shot", "medium shot" ou "aerial view".
-  Para mostrar uma acao, mostre o OBJETO ou o AMBIENTE, nao o membro: em vez de
-  "close-up of hands pouring water", escreva "wide shot of a clay jar pouring
-  water onto stone"; em vez de "close-up of weary feet in the sand", escreva
-  "wide shot of footprints crossing a dune at dusk".
+- As pessoas da historia PODEM e devem aparecer: Jesus, os discipulos, o
+  personagem do dia. Mostre-os em "medium shot" ou "wide shot", de corpo inteiro
+  ou da cintura para cima, dentro do cenario.
+- PROIBIDO enquadramento fechado e parte do corpo como assunto. O campo "visual"
+  NUNCA pode comecar com nem conter "close-up", "closeup", "extreme close",
+  "macro shot" ou "detail shot", nem ter como assunto hands, feet, foot, eyes,
+  fingers, arms, legs, skin, lips ou mouth: o gerador erra maos e dedos, e a cena
+  sai estranha. Todo "visual" comeca por "wide shot", "medium shot" ou "aerial view".
+  Para mostrar uma acao, mostre a PESSOA INTEIRA ou o objeto: em vez de
+  "close-up of hands pouring water", escreva "medium shot of a man pouring water
+  from a clay jar onto stone".
+- Se a historia tem um personagem principal, descreva-o com as MESMAS palavras em
+  todas as cenas em que ele aparece (ex.: "a bearded man in a white robe with a
+  blue sash"), senao ele muda de cara e de roupa de uma cena para a outra.
 - A imagem da PRIMEIRA cena tem que ser a mais impactante de todas. Ela aparece
   junto com a primeira frase e segura o espectador tanto quanto o texto.
-- Sem rosto de pessoa real ou celebridade, sem logo nem marca registrada.
+- Nada de pessoa real de hoje nem celebridade, sem logo nem marca registrada.
+  Os personagens biblicos sao retratados como arte, nao como foto de alguem.
 - O visual precisa combinar com o que esta sendo narrado naquele trecho.
 
 Regras da capa (campo "thumbnail", o ultimo do JSON):
@@ -282,8 +290,11 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
 _CLOSEUP_RE = re.compile(
     r"\b(?:extreme\s+|tight\s+)?(?:close[\s-]?ups?|macro\s+shots?|detail\s+shots?)\b",
     re.IGNORECASE)
+# "face" saiu da lista quando o gerador virou o da Cloudflare: pessoa em plano
+# medio agora sai bem, e a palavra aparecia em cena valida ("a man with a calm
+# face"). Maos e dedos continuam: e onde todo gerador de imagem erra.
 _BODY_RE = re.compile(
-    r"\b(?:hands?|feet|foot|eyes?|faces?|fingers?|arms?|legs?|skin|lips?|mouth|"
+    r"\b(?:hands?|feet|foot|eyes?|fingers?|arms?|legs?|skin|lips?|mouth|"
     r"palms?|shoulders?|forearms?)\b", re.IGNORECASE)
 
 
