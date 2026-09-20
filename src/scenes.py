@@ -8,22 +8,25 @@ import os
 
 from moviepy.editor import AudioFileClip
 
-from src import tts
+from src import personas as personas_mod, tts
 from src.captions import attach_punctuation
 from src.images import generate_scene_image
 
 
 def render_images(scenes: list[dict], style: str, width: int, height: int,
-                   out_dir: str, seed: int | None = None) -> None:
+                   out_dir: str, seed: int | None = None,
+                   personas: list[dict] | None = None) -> None:
     """Gera a imagem de cada cena e guarda o caminho em scene["image"].
 
     O mesmo sufixo de estilo vai em todas as cenas: sem isso cada imagem sai
-    com uma pegada visual diferente e o video parece uma colagem."""
+    com uma pegada visual diferente e o video parece uma colagem. As figuras
+    biblicas citadas ganham a descricao fixa do config (src/personas.py)."""
     os.makedirs(out_dir, exist_ok=True)
+    built = personas_mod.build(personas)
     for i, scene in enumerate(scenes):
         print(f"  [cena {i + 1}/{len(scenes)}] imagem: {scene['visual'][:60]}...")
         scene["image"] = generate_scene_image(
-            prompt=f"{scene['visual']}, {style}",
+            prompt=f"{personas_mod.apply(scene['visual'], built)}, {style}",
             width=width,
             height=height,
             out_path=os.path.join(out_dir, f"scene_{i:02d}.jpg"),
