@@ -18,6 +18,7 @@ import sys
 
 import yaml
 
+from src import compat  # noqa: F401  (remenda o Pillow antes de carregar o MoviePy)
 from src import (character, hashtags, scenes as scenes_mod, script_gen,
                  sfx, thumbnail, tiktok_api, tiktok_token, video, youtube_api)
 from src.env_file import ENV_FILE
@@ -107,6 +108,7 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         width=width, height=height,
         out_dir=os.path.join(run_dir, "scenes"),
         seed=cfg["scenes"].get("seed"),
+        personas=cfg.get("personagens"),
     )
     return script, scenes
 
