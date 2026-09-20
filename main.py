@@ -24,6 +24,7 @@ from src import (character, hashtags, scenes as scenes_mod, script_gen,
 from src.env_file import ENV_FILE
 
 OUTPUT_DIR = "output"
+BRASILIA_UTC_OFFSET = -3
 
 # o que cada plataforma precisa para publicar. Conferido antes de qualquer
 # chamada de rede, para faltar chave virar uma mensagem clara e nao um KeyError
@@ -44,6 +45,26 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _horario_utc(cfg: dict, dia: datetime.date, slot: int) -> datetime.datetime | None:
+    """Momento exato da publicacao, em UTC."""
+    hours = cfg.get("posting_hours_utc", [])
+    if not hours or slot >= len(hours):
+        return None
+    return datetime.datetime.combine(dia, datetime.time(hour=hours[slot] % 24),
+                                     tzinfo=datetime.timezone.utc)
+
+
+def _horario_brasilia(cfg: dict, dia: datetime.date, slot: int) -> str | None:
+    """Horario da publicacao em Brasilia (UTC-3), no formato YYYY-MM-DD HH:MM."""
+    hours = cfg.get("posting_hours_utc", [])
+    if not hours or slot >= len(hours):
+        return None
+    quando = (datetime.datetime.combine(dia, datetime.time(hour=hours[slot] % 24),
+                                        tzinfo=datetime.timezone.utc)
+              + datetime.timedelta(hours=BRASILIA_UTC_OFFSET))
+    return quando.strftime("%Y-%m-%d %H:%M")
+
+
 def _phase(cfg: dict) -> tuple[str, dict]:
     """Devolve o nome da fase ativa e os parametros dela.
 
@@ -57,24 +78,43 @@ def _phase(cfg: dict) -> tuple[str, dict]:
     return name, {**fallback, **cfg.get("fases", {}).get(name, {})}
 
 
+def _alvo(cfg: dict) -> tuple[datetime.date, int]:
+    """Dia e publicacao que esta sendo gerada.
+
+    Por padrao e agora: o dia de hoje e o horario mais proximo. O painel, ao
+    gerar um lote para os proximos dias, passa DATA_ALVO e SLOT_ALVO, e assim
+    cada video do lote sai com o tema, o gancho e o arco daquele horario,
+    iguais aos que o horario automatico usaria."""
+    hours = cfg.get("posting_hours_utc", [])
+    try:
+        dia = datetime.date.fromisoformat(os.environ["DATA_ALVO"])
+    except (KeyError, ValueError):
+        dia = datetime.date.today()
+    try:
+        slot = max(0, min(int(os.environ["SLOT_ALVO"]), max(0, len(hours) - 1)))
+    except (KeyError, ValueError):
+        slot = script_gen.current_slot(hours)
+    return dia, slot
+
+
 def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple[dict, list[dict]]:
     script_cfg = cfg.get("script", {})
     phase_name, phase = _phase(cfg)
     hours = cfg.get("posting_hours_utc", [])
-    slot = script_gen.current_slot(hours)
+    dia, slot = _alvo(cfg)
     slot_count = max(1, len(hours))
     # o painel local deixa escolher o tema na mao; sem isso vale a rotacao
     seed_topic = os.environ.get("TEMA", "").strip() or script_gen.topic_of_the_day(
-        script_cfg.get("topics", []), slot_index=slot, slot_count=slot_count,
+        script_cfg.get("topics", []), today=dia, slot_index=slot, slot_count=slot_count,
     )
     hook = script_gen.hook_of_the_slot(
-        script_cfg.get("hooks", []), slot_index=slot, slot_count=slot_count,
+        script_cfg.get("hooks", []), today=dia, slot_index=slot, slot_count=slot_count,
     )
     # o arco define a ESTRUTURA da historia, o gancho define so a primeira
     # frase. Girar os dois em listas de tamanhos coprimos faz o mesmo tema
     # voltar meses depois contado de outro jeito.
     arc = script_gen.rotate_by_slot(
-        script_cfg.get("arcs", []), slot_index=slot, slot_count=slot_count,
+        script_cfg.get("arcs", []), today=dia, slot_index=slot, slot_count=slot_count,
     )
     print(f"[1/5] Gerando roteiro em cenas (publicacao {slot + 1} de {slot_count}, "
           f"tema: {seed_topic or 'livre'}, gancho: {hook['name'] if hook else 'livre'}, "
@@ -134,10 +174,11 @@ def _build_character_mode(cfg: dict, run_dir: str, width: int, height: int) -> t
 
 def main() -> None:
     cfg = load_config()
-    today = datetime.date.today().isoformat()
+    dia, slot = _alvo(cfg)
+    today = dia.isoformat()
     # o slot entra no nome da pasta porque com mais de uma publicacao por dia as
     # execucoes gravariam uma sobre a outra
-    slot_suffix = script_gen.current_slot(cfg.get("posting_hours_utc", [])) + 1
+    slot_suffix = slot + 1
     # o painel local passa uma pasta propria para cada rodada, senao gerar duas
     # vezes no mesmo horario gravaria um video por cima do outro
     run_dir = os.environ.get("RUN_DIR") or os.path.join(OUTPUT_DIR, f"{today}_{slot_suffix}")
@@ -230,6 +271,9 @@ def main() -> None:
         json.dump({
             "data": today,
             "publicacao": slot_suffix,
+            # quando este video deve ir ao ar, no horario de Brasilia: e o que
+            # o painel mostra para agendar no TikTok Studio
+            "agendar_para": _horario_brasilia(cfg, dia, slot),
             "gancho": script.get("_hook"),
             "arco": script.get("_arc"),
             "fase": phase_name,
@@ -261,14 +305,28 @@ def main() -> None:
     # no horario automatico so entram as plataformas com automatico: true. O
     # TikTok fica de fora enquanto o app nao for aprovado: sai pelo painel
     auto = [p for p in REQUIRED_ENV if cfg.get(p, {}).get("automatico", True)]
-    results = publish_run(run_dir, cfg, auto)
+    # o GitHub Actions comeca o agendamento com atraso (de minutos a horas), e
+    # por isso o workflow roda ANTES da hora: aqui o video sai com a hora
+    # marcada, e quem cumpre o horario e o YouTube
+    publish_at = None
+    if cfg.get("youtube", {}).get("agendar", False):
+        quando = _horario_utc(cfg, dia, slot)
+        agora = datetime.datetime.now(datetime.timezone.utc)
+        if quando and quando > agora + datetime.timedelta(minutes=5):
+            publish_at = quando.strftime("%Y-%m-%dT%H:%M:%SZ")
+            print(f"  Publicacao marcada para {quando:%H:%M} UTC "
+                  f"({_horario_brasilia(cfg, dia, slot)} em Brasilia)")
+        else:
+            print("  A execucao passou da hora marcada: publicando agora.")
+    results = publish_run(run_dir, cfg, auto, publish_at=publish_at)
     # sem isso a execucao termina verde com a publicacao falhando, e ninguem
     # fica sabendo ate olhar o canal
     if any(not outcome["ok"] for outcome in results.values()):
         sys.exit(1)
 
 
-def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> dict:
+def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None,
+                publish_at: str | None = None) -> dict:
     """Publica um video ja gerado, lendo tudo do metadata.json da pasta.
 
     Separado da geracao para o painel local poder mostrar o video antes e so
@@ -310,7 +368,7 @@ def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None) -> 
                 description = (meta.get("descricao_youtube")
                                or f"{meta['titulo_youtube']}\n\n{tag_line}".strip())
                 outcome = _post_to_youtube(video_path, meta["titulo_youtube"], description,
-                                           platform_cfg, thumbnail_path)
+                                           platform_cfg, thumbnail_path, publish_at)
             results[platform] = {"ok": True, **outcome}
         except Exception as exc:
             print(f"  [{platform}] FALHOU: {exc}")
@@ -371,8 +429,10 @@ def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict,
 
 
 def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict,
-                      thumbnail_path: str | None = None) -> dict:
-    print("  [youtube] publicando...")
+                      thumbnail_path: str | None = None,
+                      publish_at: str | None = None) -> dict:
+    print("  [youtube] publicando..." if not publish_at
+          else f"  [youtube] enviando com publicacao marcada para {publish_at}...")
     result = youtube_api.upload_short(
         client_id=os.environ["YOUTUBE_CLIENT_ID"],
         client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
@@ -384,10 +444,17 @@ def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg:
         privacy_status=youtube_cfg.get("privacy_status", "public"),
         made_for_kids=youtube_cfg.get("made_for_kids", False),
         thumbnail_path=thumbnail_path,
+        publish_at=publish_at,
     )
     url = f"https://youtube.com/shorts/{result['id']}"
-    print(f"  [youtube] video publicado: {url}")
-    return {"id": result["id"], "url": url}
+    if publish_at:
+        print(f"  [youtube] video no ar as {publish_at} (privado ate lá): {url}")
+    else:
+        print(f"  [youtube] video publicado: {url}")
+    outcome = {"id": result["id"], "url": url}
+    if publish_at:
+        outcome["publicar_em"] = publish_at
+    return outcome
 
 
 def _cli() -> None:

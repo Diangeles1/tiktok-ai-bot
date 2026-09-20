@@ -6,9 +6,12 @@ on:
     # horarios em que o publico costuma estar ativo. Precisa casar com
     # posting_hours_utc no config.yaml: e de la que o bot deduz qual publicacao
     # esta rodando, para cada uma pegar um tema diferente.
-    - cron: "0 9 * * *"    # 06h de Brasilia, devocional da manha
-    - cron: "0 15 * * *"   # 12h de Brasilia, horario de almoco
-    - cron: "0 23 * * *"   # 20h de Brasilia, noite
+    # uma hora ANTES de cada publicacao: o GitHub atrasa o inicio (de minutos
+    # a horas) e o video sobe com a hora exata marcada no YouTube (publishAt),
+    # entao o atraso do agendador nao atrasa mais a publicacao
+    - cron: "0 8 * * *"    # gera para as 06h de Brasilia (devocional da manha)
+    - cron: "0 14 * * *"   # gera para as 12h de Brasilia (horario de almoco)
+    - cron: "0 22 * * *"   # gera para as 20h de Brasilia (noite)
   workflow_dispatch:
     inputs:
       dry_run:
