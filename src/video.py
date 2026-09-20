@@ -120,7 +120,11 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
         music = audio_loop(music, duration=total)
         tracks.append(audio_fadeout(music, min(2.0, total / 4)))
 
-    return CompositeAudioClip(tracks), tracks
+    mistura = CompositeAudioClip(tracks)
+    # sem fps explicito o MoviePy escolhe pelo primeiro clipe, e um clipe com
+    # taxa diferente (a trilha, por exemplo) sai reamostrado errado
+    mistura.fps = max(getattr(t, "fps", 0) or 0 for t in tracks) or 44100
+    return mistura, tracks
 
 
 def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path: str,

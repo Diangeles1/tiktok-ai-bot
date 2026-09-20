@@ -281,6 +281,7 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
             raise ValueError(f"Cena incompleta na resposta do LLM: {scene}")
 
     enforce_wide_framing(scenes)
+    warn_repeated_sentences(scenes)
     return data
 
 
@@ -296,6 +297,27 @@ _CLOSEUP_RE = re.compile(
 _BODY_RE = re.compile(
     r"\b(?:hands?|feet|foot|eyes?|fingers?|arms?|legs?|skin|lips?|mouth|"
     r"palms?|shoulders?|forearms?)\b", re.IGNORECASE)
+
+
+def warn_repeated_sentences(scenes: list[dict]) -> list[str]:
+    """Avisa quando a mesma frase aparece em mais de uma cena.
+
+    O modelo as vezes repete a frase de efeito na cena seguinte, e no video
+    isso soa como se a voz tivesse repetido sozinha."""
+    vistas: dict[str, int] = {}
+    repetidas = []
+    for i, scene in enumerate(scenes):
+        for frase in re.split(r"(?<=[.!?])\s+", scene.get("narration", "")):
+            chave = " ".join(frase.lower().split())
+            if len(chave.split()) < 4:
+                continue
+            if chave in vistas:
+                repetidas.append(f"cena {vistas[chave] + 1} e cena {i + 1}: \"{frase.strip()}\"")
+            else:
+                vistas[chave] = i
+    for aviso in repetidas:
+        print(f"  [script] AVISO: frase repetida ({aviso})")
+    return repetidas
 
 
 def enforce_wide_framing(scenes: list[dict]) -> int:
