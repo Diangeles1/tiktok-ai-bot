@@ -53,12 +53,61 @@ scenes:
   # Sufixo de estilo colado em toda imagem de cena. E o que faz as cenas
   # parecerem do mesmo video em vez de uma colagem de imagens soltas.
   style: >
-    cinematic biblical epic still, ancient middle eastern setting, dramatic
-    golden light and long shadows, dust in the air, painterly oil painting
-    texture, muted earthy ochre and deep blue palette, reverent mood,
-    vertical composition, no text, no logos
+    cinematic biblical epic still, ancient middle eastern setting, people with
+    olive-brown skin and dark hair in first-century linen clothing, golden light,
+    painterly oil texture, muted ochre and deep blue palette, no text, no logos
   seed: 1234          # base do seed (cada cena usa seed + indice); remova para variar sempre
+
   gap_seconds: 0.25   # respiro entre a fala de uma cena e a da proxima
+
+# Como cada figura da Biblia e desenhada. A mesma descricao entra em toda cena
+# em que o nome aparece, senao Jesus sai louro numa cena e moreno na outra.
+# Fiel ao primeiro seculo na Judeia: pele morena, cabelo e barba escuros, linho
+# sem tintura. Nada de foto de pessoa real: e sempre pintura.
+personagens:
+  - nomes: ["Jesus", "Christ", "Cristo"]
+    visual: >
+      a Judean man in his early thirties, olive-brown skin, dark brown
+      shoulder-length hair, short dark beard, undyed linen tunic and blue mantle
+  - nomes: ["Peter", "Pedro", "Simon Peter"]
+    visual: >
+      a broad-shouldered Galilean fisherman in his fifties, olive-brown skin,
+      grey-streaked dark beard, weathered face, coarse brown tunic
+  - nomes: ["John", "Joao"]
+    visual: >
+      a Galilean man in his twenties, olive-brown skin, dark curly hair, thin
+      beard, simple pale tunic
+  - nomes: ["Mary", "Maria"]
+    visual: >
+      a Judean woman, olive-brown skin, dark hair under a deep blue head veil,
+      long plain robe
+  - nomes: ["Moses", "Moises"]
+    visual: >
+      an elderly Hebrew shepherd, weathered olive-brown skin, long grey beard
+      and hair, rough striped mantle, wooden staff
+  - nomes: ["David", "Davi"]
+    visual: >
+      a young Hebrew shepherd, olive-brown skin, dark curly hair, short beard,
+      simple tunic and leather sling
+  - nomes: ["Paul", "Paulo", "Saul"]
+    visual: >
+      a bald Jewish man in his fifties, olive-brown skin, thick dark beard,
+      plain travelling cloak
+  - nomes: ["Thomas", "Tome"]
+    visual: >
+      a Judean man in his forties, olive-brown skin, short dark beard, plain
+      grey tunic
+  - nomes: ["Judas"]
+    visual: >
+      a Judean man in his thirties, olive-brown skin, dark beard, dark brown
+      tunic
+  - nomes: ["disciples", "apostles", "discipulos"]
+    visual: >
+      first-century Judean men, olive-brown skin, dark hair and beards, simple
+      linen tunics
+  - nomes: ["angel", "anjo"]
+    visual: >
+      a tall radiant figure in flowing white robes, calm face, soft golden light
 
 video:
   width: 1080
