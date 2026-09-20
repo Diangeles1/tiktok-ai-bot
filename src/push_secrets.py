@@ -7,6 +7,7 @@ pede para colar o token, que vai direto para o .env.
 
 Uso:
     python -m src.push_secrets
+    python -m src.push_secrets --conta-cloudflare --token-cloudflare
 """
 import sys
 import webbrowser
@@ -21,6 +22,12 @@ from src.env_file import ENV_FILE, update_env_file
 NEW_KEYS = {
     "--nova-groq": ("GROQ_API_KEY", "chave nova da Groq",
                     lambda v: v.startswith("gsk_") and len(v) > 30),
+    # a Cloudflare gera as imagens das cenas (cota diaria gratuita). O Account
+    # ID aparece no painel; o token so na hora em que e criado.
+    "--conta-cloudflare": ("CLOUDFLARE_ACCOUNT_ID", "Account ID da Cloudflare",
+                           lambda v: len(v) == 32 and all(c in "0123456789abcdef" for c in v.lower())),
+    "--token-cloudflare": ("CLOUDFLARE_API_TOKEN", "token da API da Cloudflare",
+                           lambda v: 30 <= len(v) <= 80),
     "--novo-secret-youtube": ("YOUTUBE_CLIENT_SECRET", "Client secret novo do YouTube",
                               lambda v: v.startswith("GOCSPX-") and len(v) > 20),
 }

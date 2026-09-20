@@ -4,3 +4,7 @@ __pycache__/
 output/
 .venv/
 venv/
+
+# login do TikTok exportado do navegador (vale como senha): nunca no git
+tiktok_cookies.txt
+*cookies*.txt
