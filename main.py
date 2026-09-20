@@ -448,6 +448,7 @@ def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg:
         made_for_kids=youtube_cfg.get("made_for_kids", False),
         thumbnail_path=thumbnail_path,
         publish_at=publish_at,
+        synthetic=youtube_cfg.get("conteudo_sintetico", True),
     )
     url = f"https://youtube.com/shorts/{result['id']}"
     if publish_at:

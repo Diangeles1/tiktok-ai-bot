@@ -433,6 +433,11 @@ tiktok:
 
 youtube:
   enabled: true
+  # declara "conteudo alterado ou sintetico" em cada envio (imagens e narracao
+  # sao de IA). E exigencia do YouTube, e desde 2026 a politica de conteudo nao
+  # autentico vale para o canal inteiro: declarar faz parte de seguir
+  # monetizavel. So desligue se um dia o video for 100% gravado por voce.
+  conteudo_sintetico: true
   # true: o video sobe privado com a hora exata marcada (publishAt) e o YouTube
   # publica no minuto certo. E o que corrige o atraso do GitHub Actions, que
   # comeca o agendamento de minutos a horas depois da hora. Exige que o
