@@ -5,7 +5,10 @@ A narracao e sintetizada por cena (nao de uma vez), porque assim a duracao de
 cada cena sai exata do proprio arquivo de audio. Cortar uma narracao unica nos
 tempos das palavras erraria o ponto de troca de imagem."""
 import os
+import shutil
+import subprocess
 
+import numpy as np
 from moviepy.editor import AudioFileClip
 
 from src import personas as personas_mod, tts
@@ -35,6 +38,124 @@ def render_images(scenes: list[dict], style: str, width: int, height: int,
         )
 
 
+# o edge-tts entrega cada fala com silencio nas pontas (medido: ~0,16s no
+# comeco e ~0,81s no fim). Somado ao respiro entre cenas, cada emenda virava
+# 1,2s de silencio no meio da historia: a voz parava e voltava de uma vez, o
+# que soa como defeito e derruba a retencao. Aparamos as pontas e deixamos so
+# o respiro escolhido no config.
+SILENCE_LEVEL = 0.01      # abaixo disso e silencio
+# o edge-tts tambem para quase 1s depois de cada ponto (medido: 0,94 a 0,96s).
+# No formato curto isso soa como se a voz tivesse cortado. Encurtamos para uma
+# pausa de respiro e corrigimos o tempo das palavras junto, senao a legenda
+# passa a adiantar em relacao a fala.
+MAX_PAUSE = 0.34          # pausa interna maior que isso e encurtada
+PAUSE_KEEP = 0.30         # tamanho que a pausa passa a ter
+KEEP_HEAD = 0.05          # sobra no comeco, para a fala nao entrar cortada
+KEEP_TAIL = 0.12          # sobra no fim, para a ultima silaba nao ser cortada
+ANALYSIS_RATE = 16000
+
+
+def _ffmpeg() -> str:
+    achado = shutil.which("ffmpeg")
+    if achado:
+        return achado
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def _pcm(path: str) -> np.ndarray:
+    saida = subprocess.run([_ffmpeg(), "-v", "error", "-i", path, "-f", "s16le",
+                            "-ac", "1", "-ar", str(ANALYSIS_RATE), "-"],
+                           capture_output=True, check=True).stdout
+    return np.frombuffer(saida, dtype=np.int16).astype(np.float32) / 32768
+
+
+def trim_silence(path: str) -> tuple[str, float]:
+    """Corta o silencio das pontas. Devolve o arquivo novo e quanto saiu do
+    comeco, que e o quanto os tempos das palavras precisam andar para tras."""
+    amostras = _pcm(path)
+    acima = np.where(np.abs(amostras) > SILENCE_LEVEL)[0]
+    if len(acima) == 0:
+        return path, 0.0
+    inicio = max(0.0, acima[0] / ANALYSIS_RATE - KEEP_HEAD)
+    fim = min(len(amostras) / ANALYSIS_RATE, acima[-1] / ANALYSIS_RATE + KEEP_TAIL)
+    if fim - inicio < 0.2:
+        return path, 0.0
+    destino = os.path.splitext(path)[0] + "_apara.wav"
+    subprocess.run([_ffmpeg(), "-y", "-v", "error", "-ss", f"{inicio:.3f}",
+                    "-to", f"{fim:.3f}", "-i", path, "-ar", "44100", "-ac", "2",
+                    "-c:a", "pcm_s16le", destino], check=True)
+    return destino, inicio
+
+
+def _silence_runs(samples: np.ndarray, rate: int) -> list[tuple[float, float]]:
+    """Trechos de silencio (inicio, duracao) em segundos."""
+    passo = max(1, int(0.02 * rate))
+    n = len(samples) // passo
+    if n == 0:
+        return []
+    energia = np.sqrt((samples[:n * passo].reshape(n, passo) ** 2).mean(axis=1))
+    trechos, contando, inicio = [], 0, 0
+    for i, e in enumerate(energia):
+        if e < SILENCE_LEVEL:
+            if contando == 0:
+                inicio = i
+            contando += 1
+        else:
+            if contando:
+                trechos.append((inicio * 0.02, contando * 0.02))
+            contando = 0
+    if contando:
+        trechos.append((inicio * 0.02, contando * 0.02))
+    return trechos
+
+
+def compress_pauses(path: str, timings: list[dict]) -> tuple[str, list[dict]]:
+    """Encurta as pausas longas dentro da fala e move os tempos das palavras."""
+    amostras = _pcm(path)
+    cortes = []
+    for inicio, duracao in _silence_runs(amostras, ANALYSIS_RATE):
+        sobra = duracao - PAUSE_KEEP
+        # so pausa interna: a do comeco e do fim ja foram aparadas
+        if duracao <= MAX_PAUSE or sobra < 0.08 or inicio <= 0.05:
+            continue
+        if inicio + duracao >= len(amostras) / ANALYSIS_RATE - 0.05:
+            continue
+        cortes.append((inicio + (duracao - sobra) / 2, sobra))
+    if not cortes:
+        return path, timings
+
+    fim_total = len(amostras) / ANALYSIS_RATE
+    pedacos, cursor = [], 0.0
+    for corte_inicio, corte_duracao in cortes:
+        pedacos.append((cursor, corte_inicio))
+        cursor = corte_inicio + corte_duracao
+    pedacos.append((cursor, fim_total))
+
+    destino = os.path.splitext(path)[0] + "_ritmo.wav"
+    filtro = ""
+    for i, (a, b) in enumerate(pedacos):
+        filtro += f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=N/SR[p{i}];"
+    filtro += "".join(f"[p{i}]" for i in range(len(pedacos)))
+    filtro += f"concat=n={len(pedacos)}:v=0:a=1[out]"
+    subprocess.run([_ffmpeg(), "-y", "-v", "error", "-i", path, "-filter_complex", filtro,
+                    "-map", "[out]", "-ar", "44100", "-ac", "2", "-c:a", "pcm_s16le", destino],
+                   check=True)
+
+    def mover(t: float) -> float:
+        saiu = 0.0
+        for corte_inicio, corte_duracao in cortes:
+            if t >= corte_inicio + corte_duracao:
+                saiu += corte_duracao
+            elif t > corte_inicio:
+                saiu += t - corte_inicio
+        return max(0.0, t - saiu)
+
+    novos = [{"text": t["text"], "start": mover(t["start"]), "end": mover(t["end"])}
+             for t in timings]
+    return destino, novos
+
+
 def render_narration(scenes: list[dict], voice: str, out_dir: str, rate: str | None = None,
                       gap: float = 0.25) -> float:
     """Sintetiza a narracao de cada cena e preenche scene["audio"], ["start"],
@@ -50,6 +171,10 @@ def render_narration(scenes: list[dict], voice: str, out_dir: str, rate: str | N
         # o edge-tts devolve a palavra sem pontuacao; recuperada aqui, na
         # origem, para todo mundo que consome o timing ja receber certo
         timings = attach_punctuation(scene["narration"], timings)
+        audio_path, cortado = trim_silence(audio_path)
+        timings = [{"text": t["text"], "start": max(0.0, t["start"] - cortado),
+                    "end": max(0.0, t["end"] - cortado)} for t in timings]
+        audio_path, timings = compress_pauses(audio_path, timings)
 
         with AudioFileClip(audio_path) as clip:
             duration = clip.duration
