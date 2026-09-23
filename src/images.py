@@ -146,11 +146,28 @@ def _cloudflare_flux2(prompt: str, width: int, height: int, seed: int,
         raise RuntimeError(f"resposta inesperada da Cloudflare: {resp.text[:200]}")
     if not data.get("success", False):
         errors = data.get("errors") or [{}]
-        raise RuntimeError(f"Cloudflare recusou: {errors[0].get('message') or str(data)[:200]}")
+        recado = errors[0].get("message") or str(data)[:200]
+        if _e_cota(recado):
+            raise CotaEsgotada(recado)
+        raise RuntimeError(f"Cloudflare recusou: {recado}")
     image = (data.get("result") or {}).get("image")
     if not image:
         raise RuntimeError(f"Cloudflare nao devolveu imagem: {str(data)[:200]}")
     return base64.b64decode(image)
+
+
+class CotaEsgotada(RuntimeError):
+    """A cota diaria gratuita da Cloudflare acabou.
+
+    Fica separada das outras falhas porque nao adianta tentar de novo: a cota e
+    da CONTA (nao do modelo), entao nem trocar de modelo resolve, e so volta na
+    virada do dia em UTC. Sem isso o bot gastava 50s por cena repetindo quatro
+    vezes um erro que nunca ia passar."""
+
+
+def _e_cota(mensagem: str) -> bool:
+    texto = mensagem.lower()
+    return "daily free allocation" in texto or "neurons" in texto
 
 
 def _tem_pessoa(prompt: str) -> bool:
@@ -194,6 +211,8 @@ def _cloudflare_image(prompt: str, width: int, height: int, seed: int,
     if not data.get("success", False):
         errors = data.get("errors") or [{}]
         message = errors[0].get("message") or str(data)[:200]
+        if _e_cota(message):
+            raise CotaEsgotada(message)
         raise RuntimeError(f"Cloudflare recusou: {message}")
     image = (data.get("result") or {}).get("image")
     if not image:
@@ -261,6 +280,13 @@ def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
                 strip_watermark(out_path)
             _fit(out_path, width, height)
             return out_path
+        except CotaEsgotada as exc:
+            # nao ha o que tentar: a cota e da conta e so volta na virada do dia
+            raise RuntimeError(
+                "A cota diaria gratuita da Cloudflare acabou, entao nao da para "
+                "gerar imagem ate a virada do dia (meia-noite UTC, 21h em "
+                f"Brasilia). Resposta da Cloudflare: {exc}"
+            ) from exc
         except (requests.RequestException, RuntimeError, OSError) as exc:
             last_exc = exc
             wait = 5 * (attempt + 1)
