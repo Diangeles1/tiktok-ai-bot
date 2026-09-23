@@ -75,6 +75,9 @@ PEAK_SAFETY = 1.3         # pico acima disto x SILENCE_LEVEL cancela o corte
 CUT_FADE = 0.008          # fade de 8ms nas duas bordas de cada corte, contra clique
 KEEP_HEAD = 0.05          # sobra no comeco, para a fala nao entrar cortada
 KEEP_TAIL = 0.12          # sobra no fim, para a ultima silaba nao ser cortada
+# fracao da energia da fala abaixo da qual o som no fim e cauda do modelo, e nao
+# voz (ver _fim_da_fala). Medido: cauda ate 24%, silaba final fraca 57%.
+TAIL_LEVEL_RATIO = 0.40
 ANALYSIS_RATE = 16000
 
 
@@ -93,6 +96,38 @@ def _pcm(path: str) -> np.ndarray:
     return np.frombuffer(saida, dtype=np.int16).astype(np.float32) / 32768
 
 
+def _fim_da_fala(amostras: np.ndarray) -> float:
+    """Instante em que a fala de verdade acaba, ignorando a cauda do modelo.
+
+    O Kokoro deixa depois da ultima silaba um rastro baixinho de 0,2 a 0,4s. Ele
+    fica acima de SILENCE_LEVEL, entao a aparagem por silencio o preservava, e
+    ele caia bem na pausa entre uma frase e a seguinte: e o "resquicio de voz"
+    que aparecia no video.
+
+    O limiar e relativo a energia da propria fala, e nao um valor fixo, porque
+    cada voz e cada frase tem volume diferente. Medido nas 7 cenas de um video
+    real: a cauda chega no maximo a 24% da energia da fala e a silaba final mais
+    fraca vale 57%, entao 40% separa os dois com folga de 1,6x para cada lado.
+    Essa folga e o que evita repetir o bug antigo de cortar a voz."""
+    passo = max(1, int(0.02 * ANALYSIS_RATE))
+    n = len(amostras) // passo
+    if n == 0:
+        return len(amostras) / ANALYSIS_RATE
+    energia = np.sqrt((amostras[:n * passo].reshape(n, passo) ** 2).mean(axis=1))
+    if energia.max() <= 0:
+        return len(amostras) / ANALYSIS_RATE
+
+    forte = energia[energia > energia.max() * 0.25]
+    if not len(forte):
+        return len(amostras) / ANALYSIS_RATE
+    limiar = float(np.median(forte)) * TAIL_LEVEL_RATIO
+
+    acima = np.where(energia >= limiar)[0]
+    if not len(acima):
+        return len(amostras) / ANALYSIS_RATE
+    return (acima[-1] + 1) * 0.02
+
+
 def trim_silence(path: str) -> tuple[str, float]:
     """Corta o silencio das pontas. Devolve o arquivo novo e quanto saiu do
     comeco, que e o quanto os tempos das palavras precisam andar para tras."""
@@ -101,7 +136,7 @@ def trim_silence(path: str) -> tuple[str, float]:
     if len(acima) == 0:
         return path, 0.0
     inicio = max(0.0, acima[0] / ANALYSIS_RATE - KEEP_HEAD)
-    fim = min(len(amostras) / ANALYSIS_RATE, acima[-1] / ANALYSIS_RATE + KEEP_TAIL)
+    fim = min(len(amostras) / ANALYSIS_RATE, _fim_da_fala(amostras) + KEEP_TAIL)
     if fim - inicio < 0.2:
         return path, 0.0
     destino = os.path.splitext(path)[0] + "_apara.wav"

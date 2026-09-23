@@ -40,12 +40,48 @@ def attach_punctuation(narration: str, word_timings: list[dict]) -> list[dict]:
     return word_timings
 
 
+_FIM_DE_FRASE = (".", "!", "?", "...")
+
+
+def _termina_frase(texto: str) -> bool:
+    """A palavra fecha uma frase? Fecha-parenteses e aspas depois do ponto nao
+    contam, por isso sao tirados antes de olhar o final."""
+    return texto.rstrip(")]}\"'").endswith(_FIM_DE_FRASE)
+
+
 def build_chunks(word_timings: list[dict], words_per_chunk: int = 3) -> list[dict]:
     """Agrupa palavras em blocos pequenos (ex: 3 em 3), guardando tambem as
-    palavras do bloco para poder destacar a que esta sendo falada."""
+    palavras do bloco para poder destacar a que esta sendo falada.
+
+    O bloco nunca atravessa o fim de uma frase. Agrupando de N em N na marra, a
+    legenda mostrava pedaco de duas frases ao mesmo tempo: num video real saiu
+    "A 14. NO" na tela, juntando o fim de "...versiculos 8 a 14." com o comeco
+    de "No campo...". Fora que da a impressao de erro, o espectador le um
+    pedaco que nao quer dizer nada."""
+    grupos: list[list[dict]] = []
+    atual: list[dict] = []
+    for palavra in word_timings:
+        atual.append(palavra)
+        if len(atual) >= words_per_chunk or _termina_frase(palavra["text"]):
+            grupos.append(atual)
+            atual = []
+    if atual:
+        grupos.append(atual)
+
+    # Frase de 4 palavras sairia como 3 + 1, e uma palavra sozinha na tela pisca
+    # sem dar tempo de ler. Ela volta para o bloco anterior, desde que o anterior
+    # seja da MESMA frase.
+    ajustados: list[list[dict]] = []
+    for grupo in grupos:
+        if (len(grupo) == 1 and ajustados
+                and len(ajustados[-1]) <= words_per_chunk
+                and not _termina_frase(ajustados[-1][-1]["text"])):
+            ajustados[-1].extend(grupo)
+        else:
+            ajustados.append(grupo)
+
     chunks = []
-    for i in range(0, len(word_timings), words_per_chunk):
-        group = word_timings[i:i + words_per_chunk]
+    for group in ajustados:
         chunks.append({
             "words": group,
             "text": " ".join(w["text"] for w in group),
