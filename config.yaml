@@ -245,6 +245,21 @@ script:
         ouvir uma historia da Biblia?" tambem servem). Sem gancho de tensao,
         sem detalhe da historia, sem pergunta que entregue o desfecho: e so o
         convite, puro e curto.
+    - name: "fato-chocante"
+      # Pedido do dono do canal (23/09/2026): abrir com um fato concreto e
+      # forte, no estilo "ele estava morto ha quatro dias". Um gancho parecido
+      # ("contraintuitivo", ver ganchos_desativados) ja distorceu a passagem
+      # em 7 de 10 testes quando pedia so "seja surpreendente" sem essa trava:
+      # aqui o fato tem que ser algo que JA ESTA no texto, nao uma surpresa
+      # inventada pelo modelo.
+      instruction: >
+        Abra com um fato concreto e impactante que JA ESTA na propria
+        passagem ou na tradicao: uma condicao, um tempo ou um numero que
+        sozinho gera tensao (ex.: "estava morto havia quatro dias", "tres
+        vezes antes do galo cantar", "sete voltas ao redor da muralha"). Nao
+        invente o fato nem exagere numero ou tempo: use exatamente o que o
+        texto registra. Nao entregue o desfecho, so o fato inicial que cria a
+        pergunta.
 
   # Fora da rotacao: o codigo so le "hooks". Em 16 geracoes de teste, com tres
   # versoes diferentes da instrucao, este gancho distorceu a passagem com

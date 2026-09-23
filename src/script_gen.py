@@ -185,11 +185,16 @@ Regra do clima (campo "clima", usada para escolher a musica de fundo):
   nem virada explosiva (ex.: a samaritana no poco, o bom samaritano).
 
 Regras da capa (campo "thumbnail", o ultimo do JSON):
-- Escreva a capa DEPOIS das cenas, como resumo do que voce acabou de narrar.
+- Escreva a capa DEPOIS das cenas, sabendo a historia inteira.
 - Uma frase curta que se le de uma vez, de 3 a 6 palavras, com gramatica e
   ortografia corretas. Nunca lista de palavras separadas por virgula.
 - Escreva em letra normal, NAO em caixa alta: o programa converte depois.
-- A capa resume a historia DESTE video, e nao outro episodio do mesmo
+- NAO resuma o desfecho na capa. Prefira um fato concreto do MEIO da historia
+  que gere duvida sozinho (ex.: "morto ha quatro dias", "tres vezes antes do
+  galo cantar") ou uma pergunta cuja resposta so aparece assistindo. "MESTRE
+  LHE DEU" ja conta o fim e nao serve; "MORTO HA QUATRO DIAS" prende sem
+  contar como termina.
+- A capa e sobre a historia DESTE video, e nao outro episodio do mesmo
   personagem. Prefira palavras que aparecem na sua propria narracao.
 - A capa tem que ser verdadeira para a passagem. Cada verbo diz o que a pessoa
   FEZ no texto: nao troque a acao por outra mais forte para chamar atencao
