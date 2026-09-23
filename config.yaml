@@ -90,6 +90,16 @@ scenes:
   # historia troca de lugar de verdade, a descricao da cena vence a referencia.
   # Exige flux2: os modelos antigos nao aceitam imagem de referencia.
   continuidade: true
+  # Reserva para quando a cota diaria gratuita da Cloudflare acabar (10.000
+  # neuronios; no uso normal o canal gasta 28% a 42%, entao isso e raro).
+  # true: o video termina na Pollinations, que e aberta e nao usa essa cota. A
+  #   imagem dela sai BEM pior e fora do estilo do canal (testado: pedimos
+  #   mulher chorando diante do tumulo e veio uma figura azul sem rosto, sem
+  #   tumulo). A marca d'agua dela e cortada automaticamente, senao o TikTok
+  #   desqualifica da monetizacao.
+  # false: a publicacao daquele horario simplesmente nao sai.
+  # E escolha de dono de canal: post pior ou post nenhum.
+  reserva_pollinations: true
 
   gap_seconds: 0.25   # respiro entre a fala de uma cena e a da proxima
 

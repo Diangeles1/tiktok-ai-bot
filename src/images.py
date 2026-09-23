@@ -231,14 +231,20 @@ def _pollinations_image(prompt: str, width: int, height: int, seed: int) -> byte
 def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
                           seed: int | None = None, retries: int = 4,
                           melhor_mao: bool = True, flux2: bool = True,
-                          referencia: str | None = None) -> str:
+                          referencia: str | None = None,
+                          reserva_pollinations: bool = True) -> str:
     """Gera a imagem de uma cena e devolve o caminho do arquivo.
 
-    flux2=True usa o Flux 2 Klein nas duas primeiras tentativas, que devolve o
-    vertical inteiro em estilo de pintura (ver CLOUDFLARE_MODEL_FLUX2). Se ele
-    falhar duas vezes (limite diario de neuronios estourado, filtro de conteudo
-    ou fora do ar), as tentativas seguintes caem para os modelos antigos, entao
-    o video sai de qualquer jeito.
+    Ordem de tentativa: Flux 2 Klein duas vezes (vertical nativo em estilo de
+    pintura, ver CLOUDFLARE_MODEL_FLUX2), depois os modelos antigos da
+    Cloudflare.
+
+    reserva_pollinations decide o que fazer quando a COTA DIARIA da Cloudflare
+    acaba. Com True, o video termina na Pollinations, que e aberta e nao usa
+    essa cota; a imagem dela sai bem pior e fora do estilo de pintura do canal
+    (testado: pediu mulher chorando diante do tumulo e veio uma figura azul sem
+    rosto, sem tumulo). Com False, a execucao para e a publicacao daquele
+    horario nao sai. E escolha de dono de canal: post pior ou post nenhum.
 
     referencia e o caminho da imagem da cena anterior: ela entra como referencia
     visual para esta cena continuar no mesmo cenario (ver REF_MAX_SIDE). So vale
@@ -259,34 +265,46 @@ def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
     tentativas_flux2 = 2 if (flux2 and provider == "cloudflare") else 0
 
     last_exc = None
+    sem_cota = False
     for attempt in range(retries):
         # o filtro de conteudo da Cloudflare julga a imagem PRONTA, nao o
         # prompt: com o seed fixo a nova tentativa recairia na mesma imagem
         # reprovada, entao a partir da segunda o seed muda
         tentativa_seed = seed if attempt == 0 else random.randint(1, 999_999)
+        na_pollinations = sem_cota or provider != "cloudflare"
         try:
-            if attempt < tentativas_flux2:
-                content = _cloudflare_flux2(full_prompt, flux2_width, flux2_height,
-                                             tentativa_seed, referencia=referencia)
-            elif provider == "cloudflare":
-                content = _cloudflare_image(full_prompt, gen_width, gen_height,
-                                             tentativa_seed, usar_flux=usar_flux)
-            else:
+            if na_pollinations:
                 content = _pollinations_image(full_prompt, gen_width, gen_height,
                                                tentativa_seed)
+            elif attempt < tentativas_flux2:
+                content = _cloudflare_flux2(full_prompt, flux2_width, flux2_height,
+                                             tentativa_seed, referencia=referencia)
+            else:
+                content = _cloudflare_image(full_prompt, gen_width, gen_height,
+                                             tentativa_seed, usar_flux=usar_flux)
             with open(out_path, "wb") as f:
                 f.write(content)
-            if provider == "pollinations":
+            if na_pollinations:
+                # a Pollinations assina o rodape da imagem (o nologo=true so vale
+                # para conta paga), e o TikTok desqualifica da monetizacao video
+                # com marca d'agua de outro app
                 strip_watermark(out_path)
             _fit(out_path, width, height)
             return out_path
         except CotaEsgotada as exc:
-            # nao ha o que tentar: a cota e da conta e so volta na virada do dia
-            raise RuntimeError(
-                "A cota diaria gratuita da Cloudflare acabou, entao nao da para "
-                "gerar imagem ate a virada do dia (meia-noite UTC, 21h em "
-                f"Brasilia). Resposta da Cloudflare: {exc}"
-            ) from exc
+            # nao adianta insistir nem trocar de modelo: a cota e da CONTA e so
+            # volta na virada do dia
+            if not reserva_pollinations:
+                raise RuntimeError(
+                    "A cota diaria gratuita da Cloudflare acabou, e a reserva "
+                    "esta desligada (scenes.reserva_pollinations). A cota volta "
+                    f"a meia-noite UTC, 21h em Brasilia. Cloudflare: {exc}"
+                ) from exc
+            last_exc = exc
+            sem_cota = True
+            print("  [images] a cota diaria gratuita da Cloudflare acabou "
+                  "(volta a meia-noite UTC, 21h em Brasilia). "
+                  "Seguindo na Pollinations, com imagem bem mais simples.")
         except (requests.RequestException, RuntimeError, OSError) as exc:
             last_exc = exc
             wait = 5 * (attempt + 1)

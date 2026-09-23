@@ -19,7 +19,8 @@ from src.images import generate_scene_image
 def render_images(scenes: list[dict], style: str, width: int, height: int,
                    out_dir: str, seed: int | None = None,
                    personas: list[dict] | None = None, melhor_mao: bool = True,
-                   flux2: bool = True, continuidade: bool = True) -> None:
+                   flux2: bool = True, continuidade: bool = True,
+                   reserva_pollinations: bool = True) -> None:
     """Gera a imagem de cada cena e guarda o caminho em scene["image"].
 
     O mesmo sufixo de estilo vai em todas as cenas: sem isso cada imagem sai
@@ -48,6 +49,7 @@ def render_images(scenes: list[dict], style: str, width: int, height: int,
             melhor_mao=melhor_mao,
             flux2=flux2,
             referencia=anterior if continuidade else None,
+            reserva_pollinations=reserva_pollinations,
             # varia o seed por cena, senao todas as imagens saem parecidas
             seed=None if seed is None else seed + i,
         )

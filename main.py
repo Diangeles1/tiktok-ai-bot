@@ -161,6 +161,7 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         melhor_mao=cfg["scenes"].get("melhor_mao", True),
         flux2=cfg["scenes"].get("flux2", True),
         continuidade=cfg["scenes"].get("continuidade", True),
+        reserva_pollinations=cfg["scenes"].get("reserva_pollinations", True),
     )
     return script, scenes
 
