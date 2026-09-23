@@ -16,9 +16,15 @@ from google.genai import types as google_genai_types
 from groq import BadRequestError, Groq, RateLimitError
 
 MODEL = "openai/gpt-oss-120b"
-# gemini-2.5-flash: rapido e dentro da cota gratuita do AI Studio (15 req/min,
-# 1500 req/dia), suficiente para os 3 videos diarios do canal.
-GEMINI_MODEL = "gemini-2.5-flash"
+# Rapido e dentro da cota gratuita do AI Studio, suficiente para os 3 videos
+# diarios do canal.
+# Era "gemini-2.5-flash" ate 23/09/2026, quando a troca da chave revelou que o
+# Google tinha aposentado aquele nome: a API respondia 404 "no longer available
+# to new users". Como o provedor padrao e a Groq, o defeito estava escondido e
+# so apareceria no dia em que alguem trocasse para a Gemini.
+# Evitar os apelidos "-latest": no mesmo teste, gemini-flash-latest respondeu
+# 503. Nome de versao fixa e mais previsivel para producao.
+GEMINI_MODEL = "gemini-3.6-flash"
 MIN_NARRATION_WORDS = 170
 MAX_ATTEMPTS = 3      # tentativas por narracao curta demais
 JSON_ATTEMPTS = 3     # tentativas por JSON invalido devolvido pelo modelo
