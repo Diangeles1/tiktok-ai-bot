@@ -34,6 +34,24 @@ CAMERA_MOVES = [
     (1.16, 1.04, (0.50, 0.38), (0.50, 0.62)),
 ]
 
+# Cada cena vira DOIS planos da mesma imagem, com um corte seco no meio: um
+# aberto e depois um fechado em outro ponto do quadro. E o que editor de
+# documentario faz com foto parada, e dobra o numero de cortes sem gerar uma
+# imagem a mais. Sem isso a mesma imagem fica de 6 a 8 segundos na tela, quando
+# o formato curto pede corte a cada 1,5 a 3 segundos.
+# O plano fechado precisa ser BEM mais fechado: cortar de 1.10 para 1.15 no
+# mesmo centro o olho le como falha de video, nao como corte. Por isso o
+# segundo plano pula para perto de 1.4 e sai do centro.
+SHOT_PAIRS = [
+    ((1.03, 1.12, (0.50, 0.45), (0.50, 0.55)), (1.42, 1.34, (0.34, 0.30), (0.44, 0.38))),
+    ((1.05, 1.14, (0.62, 0.50), (0.44, 0.50)), (1.38, 1.46, (0.64, 0.62), (0.54, 0.56))),
+    ((1.03, 1.13, (0.38, 0.55), (0.56, 0.45)), (1.44, 1.36, (0.60, 0.34), (0.50, 0.44))),
+    ((1.06, 1.15, (0.50, 0.60), (0.50, 0.40)), (1.36, 1.44, (0.38, 0.58), (0.48, 0.50))),
+]
+# cena mais curta que isso nao se divide: dois planos de 2s cada atropelam a
+# frase em vez de dar ritmo
+SPLIT_MIN_SECONDS = 4.5
+
 # Acabamento de imagem, aplicado no encode final sobre o quadro inteiro (cena,
 # legenda e marca d'agua juntas). Aplicar so na imagem deixaria a legenda com
 # aparencia de adesivo colado por cima, em vez de parte da mesma cena.
@@ -207,6 +225,48 @@ def _pop(clip, canvas_w: int, canvas_h: int, center_y: float,
     return clip.resize(scale).set_position(position)
 
 
+# Dinamica da trilha. O volume de base (sfx.music_volume, 0.06) ja e baixo o
+# bastante para nao disputar com a narracao: o que faltava era o outro lado, a
+# trilha CRESCER. Ela sobe pouco antes da ultima cena, que e onde a historia
+# vira, e volta ao normal enquanto a ultima fala acontece, para o crescimento
+# nao atropelar justamente a frase mais importante.
+SWELL_PEAK = 2.2      # multiplicador do volume de base no topo
+SWELL_IN = 1.2        # tempo subindo, terminando no comeco da ultima cena
+SWELL_HOLD = 0.4      # tempo no topo
+SWELL_OUT = 2.5       # tempo voltando ao volume de base
+
+
+def _ganho_trilha(t, virada: float | None, narration_end: float, total: float):
+    """Multiplicador do volume da trilha em cada instante.
+
+    Aceita t escalar ou vetor de amostras, que e como o MoviePy chama."""
+    tempo = np.asarray(t, dtype=float)
+    ganho = np.ones_like(tempo)
+
+    if virada is not None:
+        subida = np.clip((tempo - (virada - SWELL_IN)) / SWELL_IN, 0.0, 1.0)
+        descida = 1.0 - np.clip((tempo - (virada + SWELL_HOLD)) / SWELL_OUT, 0.0, 1.0)
+        ganho = ganho + (SWELL_PEAK - 1.0) * np.minimum(subida, descida)
+
+    # sem a narracao por cima, o mesmo volume que era "de fundo" passa a soar
+    # alto sozinho (feedback real: "a musica no final ficou muito alta"), entao
+    # a partir do fim da narracao ela vai sumindo ate o corte
+    if total > narration_end:
+        saida = np.clip((tempo - narration_end) / (total - narration_end), 0.0, 1.0)
+        ganho = ganho * (1.0 - saida)
+    return ganho
+
+
+def _com_dinamica(music, virada: float | None, narration_end: float, total: float):
+    def aplica(get_frame, t):
+        quadro = get_frame(t)
+        ganho = _ganho_trilha(t, virada, narration_end, total)
+        if np.ndim(quadro) == 2:          # bloco de amostras: (n, canais)
+            return quadro * np.asarray(ganho).reshape(-1, 1)
+        return quadro * ganho             # amostra unica
+    return music.fl(aplica, keep_duration=True)
+
+
 def _build_audio(scenes: list[dict], narration_end: float, total: float,
                   laugh_path: str | None, laugh_gap: float,
                   music_path: str | None, music_volume: float,
@@ -224,12 +284,11 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
     if music_path:
         music = AudioFileClip(music_path).volumex(music_volume)
         music = audio_loop(music, duration=total)
-        # sem a narracao por cima, o mesmo volume que era "de fundo" passa a
-        # soar alto sozinho (feedback: "a musica no final ficou muito alta").
-        # A partir do fim da narracao a musica vai sumindo aos poucos, em vez
-        # de segurar o volume ate faltar so 2s pro corte.
-        fade = max(1.0, total - narration_end)
-        tracks.append(audio_fadeout(music, min(fade, total)))
+        # a trilha deixa de ser um tapete de volume fixo e passa a ter dinamica:
+        # cresce na virada da historia e some depois da narracao (ver _ganho_trilha)
+        virada = scenes[-1]["start"] if len(scenes) > 2 else None
+        music = _com_dinamica(music, virada, narration_end, total)
+        tracks.append(music)
 
     # efeitos de cena (vento, chuva, fanfarra...), bem baixos, para dar corpo
     # ao momento sem competir com a narracao. Cada item: path, start, volume e,
@@ -283,35 +342,61 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
     # parece interrompido
     total += tail
 
+    # Dissolucao so na entrada da ULTIMA cena, que e onde a historia vira. Entre
+    # as outras o corte e seco: em gramatica de cinema a dissolucao significa
+    # "passou tempo", entao usar em toda emenda nao comunica nada e ainda
+    # amolece cada corte, que e o que faz o video parecer apresentacao de
+    # slides. Com menos de tres cenas nao ha virada para marcar.
+    def _dissolucao_na_entrada(indice: int) -> float:
+        return crossfade if (indice == len(scenes) - 1 and len(scenes) > 2) else 0.0
+
     scene_clips = []
     for i, scene in enumerate(scenes):
         is_last = i == len(scenes) - 1
-        # a imagem passa do fim da propria cena para a proxima ter algo por baixo
-        # durante o crossfade; a ultima estica ate o fim para a risada nao cair
-        # sobre tela preta
-        visual_duration = (total - scene["start"]) if is_last else (scene["duration"] + crossfade)
+        # a imagem passa do fim da propria cena so quando a proxima entra
+        # dissolvendo, para ter algo por baixo; a ultima estica ate o fim para a
+        # assinatura nao cair sobre tela preta
+        sobra = 0.0 if is_last else _dissolucao_na_entrada(i + 1)
+        visual_duration = (total - scene["start"]) if is_last else (scene["duration"] + sobra)
+        entrada = _dissolucao_na_entrada(i)
 
-        if zoom_effect:
-            # so a cena com gente (medium shot, ver _tem_pessoa em src/images.py)
-            # ganha o efeito de profundidade: tem um "primeiro plano" para
-            # destacar. A cena aberta (wide shot, aerial view) e paisagem, sem
-            # sujeito para separar, e fica no zoom de uma camada so.
-            move = CAMERA_MOVES[i % len(CAMERA_MOVES)]
-            if parallax_effect and "medium shot" in scene.get("visual", "").lower():
-                clip = _parallax_move(scene["image"], visual_duration, width, height,
-                                       move, color_boost)
-            else:
-                clip = _camera_move(scene["image"], visual_duration, width, height,
-                                     move, color_boost)
-        else:
+        if not zoom_effect:
             frame = np.asarray(_load_boosted(scene["image"], color_boost))
             clip = (ImageClip(frame).set_duration(visual_duration)
                     .resize(height=height).set_position("center"))
+            clip = clip.set_start(scene["start"])
+            if entrada:
+                clip = clip.crossfadein(entrada)
+            scene_clips.append(clip)
+            continue
 
-        clip = clip.set_start(scene["start"])
-        if i > 0:
-            clip = clip.crossfadein(crossfade)
-        scene_clips.append(clip)
+        # so a cena com gente (medium shot, ver _tem_pessoa em src/images.py)
+        # ganha o efeito de profundidade: tem um "primeiro plano" para
+        # destacar. A cena aberta (wide shot, aerial view) e paisagem, sem
+        # sujeito para separar, e fica no zoom de uma camada so.
+        tem_pessoa = parallax_effect and "medium shot" in scene.get("visual", "").lower()
+        aberto, fechado = SHOT_PAIRS[i % len(SHOT_PAIRS)]
+
+        if visual_duration >= SPLIT_MIN_SECONDS:
+            # o plano aberto fica um pouco mais que o fechado: e nele que a
+            # frase se estabelece, o fechado entra para acentuar
+            dur_aberto = visual_duration * 0.55
+            planos = [(aberto, 0.0, dur_aberto, tem_pessoa),
+                      (fechado, dur_aberto, visual_duration - dur_aberto, False)]
+        else:
+            planos = [(aberto, 0.0, visual_duration, tem_pessoa)]
+
+        for ordem, (move, offset, dur, usar_parallax) in enumerate(planos):
+            if usar_parallax:
+                clip = _parallax_move(scene["image"], dur, width, height, move, color_boost)
+            else:
+                clip = _camera_move(scene["image"], dur, width, height, move, color_boost)
+            clip = clip.set_start(scene["start"] + offset)
+            # so o primeiro plano da cena herda a dissolucao de entrada; o corte
+            # entre os dois planos da MESMA cena e sempre seco
+            if ordem == 0 and entrada:
+                clip = clip.crossfadein(entrada)
+            scene_clips.append(clip)
 
     caption_clips = []
     os.makedirs(tmp_dir, exist_ok=True)
