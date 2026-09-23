@@ -34,6 +34,24 @@ CAMERA_MOVES = [
     (1.16, 1.04, (0.50, 0.38), (0.50, 0.62)),
 ]
 
+# Acabamento de imagem, aplicado no encode final sobre o quadro inteiro (cena,
+# legenda e marca d'agua juntas). Aplicar so na imagem deixaria a legenda com
+# aparencia de adesivo colado por cima, em vez de parte da mesma cena.
+#  - eq: contraste leve, que a imagem do gerador sai um pouco chapada
+#  - colorbalance: luz quente no claro e sombra puxada para o azul, que e o
+#    contraste de cor do "golden hour" que o cinema usa (a paleta do canal ja
+#    pede ocre e azul, isso reforca)
+#  - vignette: escurece o canto e puxa o olho para o centro, onde esta a acao.
+#    PI/5 e mais suave que o PI/4.5 comum em video de terror
+#  - noise: grao de filme. Alem do visual, ele quebra a "lisura" de imagem
+#    gerada por IA, que e o que mais denuncia video automatico
+ACABAMENTO = (
+    "eq=contrast=1.06:saturation=1.03,"
+    "colorbalance=rh=0.04:bh=-0.03:rs=-0.02:bs=0.05,"
+    "vignette=PI/5,"
+    "noise=alls=5:allf=t"
+)
+
 
 def _load_boosted(image_path: str, color_boost: float = 1.0) -> Image.Image:
     """Abre a imagem ja com o realce de cor aplicado.
@@ -245,7 +263,7 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
                  extra_sfx: list[dict] | None = None,
                  crossfade: float = 0.6, tail: float = 1.2, color_boost: float = 1.0,
                  watermark: str | None = None, watermark_opacity: float = 0.35,
-                 watermark_repeats: int = 4) -> str:
+                 watermark_repeats: int = 4, acabamento: bool = True) -> str:
     """Cada cena precisa de "image", "audio", "start", "duration" e "timings"
     (tempos absolutos), como monta src.scenes."""
     narration_end = scenes[-1]["start"] + scenes[-1]["duration"]
@@ -372,6 +390,9 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
         preset="medium",
         threads=4,
         logger=None,
+        # o acabamento entra NO MESMO encode: aplicar depois exigiria
+        # recomprimir o video inteiro de novo e perder qualidade
+        ffmpeg_params=["-vf", ACABAMENTO] if acabamento else None,
     )
 
     final.close()

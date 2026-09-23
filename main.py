@@ -159,6 +159,8 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         seed=cfg["scenes"].get("seed"),
         personas=cfg.get("personagens"),
         melhor_mao=cfg["scenes"].get("melhor_mao", True),
+        flux2=cfg["scenes"].get("flux2", True),
+        continuidade=cfg["scenes"].get("continuidade", True),
     )
     return script, scenes
 
@@ -287,6 +289,7 @@ def main() -> None:
         watermark=(brand.get("handle") if brand.get("watermark_enabled", True) else None),
         watermark_opacity=brand.get("watermark_opacity", 0.35),
         watermark_repeats=brand.get("watermark_repeats", 4),
+        acabamento=cfg["video"].get("acabamento", True),
     )
 
     thumb_cfg = cfg.get("thumbnail", {})

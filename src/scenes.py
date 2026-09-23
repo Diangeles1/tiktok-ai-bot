@@ -18,27 +18,40 @@ from src.images import generate_scene_image
 
 def render_images(scenes: list[dict], style: str, width: int, height: int,
                    out_dir: str, seed: int | None = None,
-                   personas: list[dict] | None = None, melhor_mao: bool = True) -> None:
+                   personas: list[dict] | None = None, melhor_mao: bool = True,
+                   flux2: bool = True, continuidade: bool = True) -> None:
     """Gera a imagem de cada cena e guarda o caminho em scene["image"].
 
     O mesmo sufixo de estilo vai em todas as cenas: sem isso cada imagem sai
     com uma pegada visual diferente e o video parece uma colagem. As figuras
     biblicas citadas ganham a descricao fixa do config (src/personas.py).
-    melhor_mao manda a cena com gente para outro modelo, que acerta mao e
-    rosto melhor (ver CLOUDFLARE_MODEL_PESSOA em src/images.py)."""
+    flux2 usa o modelo que devolve o vertical inteiro em pintura; melhor_mao
+    vale so no fallback, mandando a cena com gente para outro modelo (ver
+    CLOUDFLARE_MODEL_FLUX2 e CLOUDFLARE_MODEL_PESSOA em src/images.py).
+
+    continuidade manda a imagem da cena anterior como referencia da seguinte,
+    para o video parecer o mesmo lugar filmado de outro angulo em vez de uma
+    sequencia de quadros sem relacao (ver REF_MAX_SIDE em src/images.py). A
+    descricao da cena continua mandando: quando a historia muda de lugar de
+    verdade, o prompt vence a referencia, que ai carrega so luz e paleta."""
     os.makedirs(out_dir, exist_ok=True)
     built = personas_mod.build(personas)
+    anterior = None
     for i, scene in enumerate(scenes):
-        print(f"  [cena {i + 1}/{len(scenes)}] imagem: {scene['visual'][:60]}...")
+        marca = "" if anterior is None else " (seguindo a cena anterior)"
+        print(f"  [cena {i + 1}/{len(scenes)}]{marca} imagem: {scene['visual'][:60]}...")
         scene["image"] = generate_scene_image(
             prompt=f"{personas_mod.apply(scene['visual'], built)}, {style}",
             width=width,
             height=height,
             out_path=os.path.join(out_dir, f"scene_{i:02d}.jpg"),
             melhor_mao=melhor_mao,
+            flux2=flux2,
+            referencia=anterior if continuidade else None,
             # varia o seed por cena, senao todas as imagens saem parecidas
             seed=None if seed is None else seed + i,
         )
+        anterior = scene["image"]
 
 
 # o edge-tts entrega cada fala com silencio nas pontas (medido: ~0,16s no

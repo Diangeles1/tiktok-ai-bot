@@ -76,6 +76,21 @@ scenes:
   # a paisagem. false volta tudo para o SDXL.
   melhor_mao: true
 
+  # Flux 2 Klein no lugar do SDXL e do Flux 1: ele devolve o vertical nativo
+  # (896x1600), entao a cena nao e mais CORTADA na lateral, e a ampliacao na
+  # montagem cai de 1,87x para 1,2x. E ele respeita "painterly oil texture": o
+  # Flux 1 ignorava e entregava FOTO, que e o que fazia a cena com gente
+  # parecer banco de imagem.
+  # O tamanho e 1600 de altura e nao os 1920 do video de proposito: gasta ~42%
+  # da cota diaria gratuita em vez de ~80%, deixando folga para retentativa.
+  # Ver FLUX2_MAX_SIDE em src/images.py antes de subir. false volta tudo.
+  flux2: true
+  # Cada cena recebe a anterior como referencia visual, entao o video parece o
+  # mesmo lugar filmado de outro angulo em vez de quadros soltos. Quando a
+  # historia troca de lugar de verdade, a descricao da cena vence a referencia.
+  # Exige flux2: os modelos antigos nao aceitam imagem de referencia.
+  continuidade: true
+
   gap_seconds: 0.25   # respiro entre a fala de uma cena e a da proxima
 
 # Como cada figura da Biblia e desenhada. A mesma descricao entra em toda cena
@@ -146,6 +161,12 @@ video:
   # Leve realce de cor no video inteiro. A imagem do gerador sai um pouco
   # lavada, e a correcao faz diferenca visivel no feed. 1.0 desliga.
   color_boost: 1.12
+  # Acabamento de cinema no encode final: contraste, luz quente com sombra
+  # azulada (o contraste de cor do "golden hour"), vinheta puxando o olho para
+  # o centro e grao de filme. O grao tambem quebra a lisura de imagem gerada
+  # por IA, que e o que mais denuncia video automatico. Ver ACABAMENTO em
+  # src/video.py para mexer nos valores. false desliga.
+  acabamento: true
 
 # Fase do canal. Estrategia de crescimento em duas etapas:
 #  - "crescimento": a conta ainda nao e monetizada, entao nao ha motivo para
