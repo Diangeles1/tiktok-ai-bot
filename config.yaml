@@ -331,122 +331,161 @@ script:
         cumprir. Mostre o peso do tempo passando e a duvida no meio do caminho,
         antes do cumprimento.
 
-  # Um tema por publicacao, girando pela lista. Sem isso o modelo repetiria
-  # sempre as historias mais famosas, e as tres execucoes do mesmo dia sairiam
-  # iguais. Deterministico e sem estado entre execucoes.
-  # A lista precisa ser grande: com 3 videos por dia, 30 temas repetem em 10
-  # dias. Os 96 abaixo dao mais de um mes sem repetir.
+  # Mistura de tipos de conteudo, uma sequencia por horario de publicacao.
+  # Antes os 103 temas giravam numa lista unica, entao os tipos saiam na
+  # proporcao em que aparecem na lista, sem controle: parabola de ensinamento
+  # caia em horario nobre e milagre caia de manha, ao acaso.
+  # Agora cada horario tem uma identidade, e quem assiste sempre as 20h encontra
+  # sempre o mesmo tipo de video. A sequencia de cada horario tem 10 posicoes
+  # (uma por dia), e o dia escolhe a posicao. Somando os tres horarios, os 30
+  # videos de cada 10 dias saem na proporcao 40% surpreendente, 30% personagem,
+  # 20% milagre e 10% reflexao.
+  # Para mudar o peso de um tipo, troque as palavras aqui: o codigo so conta.
+  mistura:
+    # 06h: historia surpreendente, o tipo que mais rendeu ate agora
+    - ["surpreendente", "surpreendente", "surpreendente", "reflexao",
+       "surpreendente", "surpreendente", "surpreendente", "surpreendente",
+       "reflexao", "surpreendente"]
+    # 12h: um personagem (santo ou figura biblica) por dia
+    - ["personagem", "personagem", "personagem", "personagem", "personagem",
+       "personagem", "personagem", "personagem", "personagem", "reflexao"]
+    # 20h: milagre e revelacao, com historia surpreendente no fim do ciclo
+    - ["milagre", "milagre", "milagre", "milagre", "milagre", "milagre",
+       "surpreendente", "surpreendente", "surpreendente", "surpreendente"]
+
+  # Os temas, agrupados pelo tipo que a "mistura" acima sorteia. Dentro do
+  # grupo a escolha continua deterministica e sem estado entre execucoes, e
+  # continua pulando pela lista (ver _spread_stride) para nao publicar dois
+  # temas vizinhos em dias seguidos.
+  # Cada grupo precisa de tema suficiente para nao repetir cedo: no ritmo
+  # acima, "surpreendente" sai 12 vezes a cada 10 dias, "personagem" 9,
+  # "milagre" 6 e "reflexao" 3.
   topics:
-    # --- Jesus: infancia e inicio do ministerio ---
-    - "O nascimento em Belem, sem lugar na hospedaria"
-    - "Os pastores avisados pelos anjos no campo"
-    - "Os magos seguindo a estrela do oriente"
-    - "A fuga para o Egito no meio da noite"
-    - "Jesus perdido no templo aos doze anos"
-    - "O batismo no rio Jordao"
-    - "As quarenta noites de tentacao no deserto"
-    - "O chamado dos pescadores para deixarem as redes"
-    - "As bodas de Cana, quando a agua virou vinho"
-    - "A pesca milagrosa depois da noite inteira sem nada"
-    # --- Jesus: milagres ---
-    - "A tempestade acalmada no meio do mar"
-    - "Jesus andando sobre as aguas e Pedro afundando"
-    - "A multiplicacao dos paes e dos peixes"
-    - "O paralitico descido pelo buraco do telhado"
-    - "O cego de Jerico que nao parou de gritar"
-    - "Os dez leprosos e o unico que voltou para agradecer"
-    - "A mulher doente que tocou a barra do manto na multidao"
-    - "A filha de Jairo, quando todos ja choravam"
-    - "Lazaro chamado de volta do tumulo"
-    - "O servo do centurio curado de longe"
-    - "A sogra de Pedro curada da febre"
-    - "O homem com a mao atrofiada curado no sabado"
-    # --- Jesus: encontros ---
-    - "Zaqueu subindo na arvore para ver de longe"
-    - "A samaritana e a conversa no poco ao meio-dia"
-    - "A mulher acusada de adulterio e as pedras no chao"
-    - "Nicodemos procurando Jesus de madrugada"
-    - "Maria e Marta recebendo Jesus em Betania"
-    - "O jovem rico que nao conseguiu se desfazer do que tinha"
-    - "Mateus, o cobrador de impostos, chamado da mesa"
-    - "A viuva de Naim e o filho unico no caminho do enterro"
-    # --- Jesus: parabolas ---
-    - "O bom samaritano parando na estrada"
-    - "O filho prodigo voltando para casa"
-    - "O pastor que deixa noventa e nove para buscar uma ovelha"
-    - "O semeador e os quatro tipos de terreno"
-    - "O grao de mostarda que virou arvore"
-    - "As dez virgens e as lampadas sem azeite"
-    - "Os talentos confiados aos tres servos"
-    - "A viuva que deu as duas ultimas moedas"
-    - "O rico e o pobre Lazaro na porta"
-    - "O fariseu e o publicano orando no templo"
-    - "O servo perdoado pelo rei que nao perdoou o companheiro"
-    - "O tesouro escondido no campo"
-    # --- Jesus: paixao e ressurreicao ---
-    - "A entrada em Jerusalem sobre um jumento"
-    - "A ultima ceia e o pao repartido"
-    - "O lava-pes que ninguem entendeu na hora"
-    - "A agonia no jardim de Getsemani"
-    - "A traicao selada com um beijo"
-    - "Pedro negando tres vezes antes do galo cantar"
-    - "Jesus calado diante de Pilatos"
-    - "Simao ajudando a carregar a cruz"
-    - "O bom ladrao ao lado na cruz"
-    - "A escuridao do meio-dia no calvario"
-    - "A pedra encontrada rolada na manha de domingo"
-    - "Maria Madalena confundindo Jesus com o jardineiro"
-    - "Os discipulos de Emaus reconhecendo no partir do pao"
-    - "Tomé, o apóstolo que precisou ver para acreditar"
-    - "O peixe assado na praia e o perdao de Pedro"
-    - "A ascensao diante dos discipulos"
-    - "Pentecostes e as linguas de fogo"
-    # --- Antigo Testamento ---
-    - "Noe construindo a arca diante do deboche de todos"
-    - "A torre de Babel e a confusao das linguas"
-    - "Abraao subindo o monte com Isaque"
-    - "Jaco lutando a noite inteira com o anjo"
-    - "Jose vendido pelos irmaos e sua ascensao no Egito"
-    - "Moises e a sarca que ardia sem se consumir"
-    - "Moises e a travessia do Mar Vermelho"
-    - "As muralhas de Jerico caindo apos sete voltas"
-    - "Gideao vencendo com apenas trezentos homens"
-    - "Sansao perdendo e reencontrando sua forca"
-    - "Rute escolhendo ficar com Noemi"
-    - "Davi enfrentando Golias com uma funda"
-    - "Davi poupando a vida de Saul na caverna"
-    - "Salomao julgando a disputa entre duas maes"
-    - "Elias desafiando os profetas de Baal no Carmelo"
-    - "Elias alimentado pelos corvos no deserto"
-    - "Naamã, o comandante sírio, curado depois de sete banhos no Jordão"
-    - "Jonas engolido pelo grande peixe"
-    - "Os tres jovens na fornalha ardente"
-    - "Daniel na cova dos leoes"
-    - "Ester arriscando a vida diante do rei"
-    - "Jó perdendo tudo e permanecendo firme"
-    - "Neemias reconstruindo os muros sob ameaca"
-    - "A viuva de Sarepta e o pote de farinha que nao acabava"
-    # --- Santos e tradicao catolica ---
-    - "Sao Francisco de Assis renunciando a riqueza do pai"
-    - "Sao Francisco e o lobo de Gubbio"
-    - "Santa Clara deixando tudo para seguir Francisco"
-    - "Santo Antonio e o sermao aos peixes"
-    - "Sao Jose, o pai que confiou sem entender"
-    - "Nossa Senhora de Fatima e os tres pastorinhos"
-    - "Nossa Senhora de Lourdes e a menina Bernadette"
-    - "Nossa Senhora Aparecida encontrada no rio Paraiba"
-    - "Nossa Senhora de Guadalupe e as rosas no manto de Juan Diego"
-    - "Santa Teresinha e o caminho das coisas pequenas"
-    - "Santa Rita de Cassia e o perdao impossivel"
-    - "Sao Judas Tadeu, o santo das causas perdidas"
-    - "Sao Sebastiao amarrado e fiel"
-    - "Padre Pio e as marcas nas maos"
-    - "Madre Teresa nas ruas de Calcuta"
-    - "Santo Agostinho e a conversao no jardim"
-    - "Sao Paulo, de perseguidor a apostolo"
-    - "Sao Pedro, o pescador que virou pedra"
-    - "Frei Galvao, o primeiro santo brasileiro"
-    - "Santa Dulce dos Pobres e o hospital que nasceu de nada"
+    # Historia com virada, perseguicao, risco de morte ou desfecho inesperado.
+    # E o grupo do horario da manha e da sobra da noite: 12 dos 30 videos.
+    surpreendente:
+      # --- Jesus: infancia e inicio do ministerio ---
+      - "O nascimento em Belem, sem lugar na hospedaria"
+      - "Os pastores avisados pelos anjos no campo"
+      - "Os magos seguindo a estrela do oriente"
+      - "A fuga para o Egito no meio da noite"
+      - "Jesus perdido no templo aos doze anos"
+      - "O batismo no rio Jordao"
+      - "As quarenta noites de tentacao no deserto"
+      - "O chamado dos pescadores para deixarem as redes"
+      - "As bodas de Cana, quando a agua virou vinho"
+      - "A pesca milagrosa depois da noite inteira sem nada"
+      # --- Jesus: paixao e ressurreicao ---
+      - "A entrada em Jerusalem sobre um jumento"
+      - "A ultima ceia e o pao repartido"
+      - "O lava-pes que ninguem entendeu na hora"
+      - "A agonia no jardim de Getsemani"
+      - "A traicao selada com um beijo"
+      - "Pedro negando tres vezes antes do galo cantar"
+      - "Jesus calado diante de Pilatos"
+      - "Simao ajudando a carregar a cruz"
+      - "O bom ladrao ao lado na cruz"
+      - "A escuridao do meio-dia no calvario"
+      - "A pedra encontrada rolada na manha de domingo"
+      - "Maria Madalena confundindo Jesus com o jardineiro"
+      - "Os discipulos de Emaus reconhecendo no partir do pao"
+      - "Tomé, o apóstolo que precisou ver para acreditar"
+      - "O peixe assado na praia e o perdao de Pedro"
+      - "A ascensao diante dos discipulos"
+      - "Pentecostes e as linguas de fogo"
+      # --- Antigo Testamento: drama e virada ---
+      - "Noe construindo a arca diante do deboche de todos"
+      - "A torre de Babel e a confusao das linguas"
+      - "Abraao subindo o monte com Isaque"
+      - "Jaco lutando a noite inteira com o anjo"
+      - "Jose vendido pelos irmaos e sua ascensao no Egito"
+      - "Gideao vencendo com apenas trezentos homens"
+      - "Sansao perdendo e reencontrando sua forca"
+      - "Rute escolhendo ficar com Noemi"
+      - "Davi enfrentando Golias com uma funda"
+      - "Davi poupando a vida de Saul na caverna"
+      - "Salomao julgando a disputa entre duas maes"
+      - "Ester arriscando a vida diante do rei"
+      - "Jó perdendo tudo e permanecendo firme"
+      - "Neemias reconstruindo os muros sob ameaca"
+
+    # Uma pessoa no centro: santo da tradicao ou figura que encontra Jesus.
+    # E o grupo do meio-dia: 9 dos 30 videos.
+    personagem:
+      # --- Jesus: encontros ---
+      - "Zaqueu subindo na arvore para ver de longe"
+      - "A samaritana e a conversa no poco ao meio-dia"
+      - "A mulher acusada de adulterio e as pedras no chao"
+      - "Nicodemos procurando Jesus de madrugada"
+      - "Maria e Marta recebendo Jesus em Betania"
+      - "O jovem rico que nao conseguiu se desfazer do que tinha"
+      - "Mateus, o cobrador de impostos, chamado da mesa"
+      - "A viuva de Naim e o filho unico no caminho do enterro"
+      # --- Santos e tradicao catolica ---
+      - "Sao Francisco de Assis renunciando a riqueza do pai"
+      - "Sao Francisco e o lobo de Gubbio"
+      - "Santa Clara deixando tudo para seguir Francisco"
+      - "Santo Antonio e o sermao aos peixes"
+      - "Sao Jose, o pai que confiou sem entender"
+      - "Nossa Senhora de Fatima e os tres pastorinhos"
+      - "Nossa Senhora de Lourdes e a menina Bernadette"
+      - "Nossa Senhora Aparecida encontrada no rio Paraiba"
+      - "Nossa Senhora de Guadalupe e as rosas no manto de Juan Diego"
+      - "Santa Teresinha e o caminho das coisas pequenas"
+      - "Santa Rita de Cassia e o perdao impossivel"
+      - "Sao Judas Tadeu, o santo das causas perdidas"
+      - "Sao Sebastiao amarrado e fiel"
+      - "Padre Pio e as marcas nas maos"
+      - "Madre Teresa nas ruas de Calcuta"
+      - "Santo Agostinho e a conversao no jardim"
+      - "Sao Paulo, de perseguidor a apostolo"
+      - "Sao Pedro, o pescador que virou pedra"
+      - "Frei Galvao, o primeiro santo brasileiro"
+      - "Santa Dulce dos Pobres e o hospital que nasceu de nada"
+
+    # Cura, ressurreicao e intervencao sobrenatural: a "grande revelacao"
+    # da noite. 6 dos 30 videos.
+    milagre:
+      # --- Jesus: milagres ---
+      - "A tempestade acalmada no meio do mar"
+      - "Jesus andando sobre as aguas e Pedro afundando"
+      - "A multiplicacao dos paes e dos peixes"
+      - "O paralitico descido pelo buraco do telhado"
+      - "O cego de Jerico que nao parou de gritar"
+      - "Os dez leprosos e o unico que voltou para agradecer"
+      - "A mulher doente que tocou a barra do manto na multidao"
+      - "A filha de Jairo, quando todos ja choravam"
+      - "Lazaro chamado de volta do tumulo"
+      - "O servo do centurio curado de longe"
+      - "A sogra de Pedro curada da febre"
+      - "O homem com a mao atrofiada curado no sabado"
+      # --- Antigo Testamento: milagre e livramento ---
+      - "Moises e a sarca que ardia sem se consumir"
+      - "Moises e a travessia do Mar Vermelho"
+      - "As muralhas de Jerico caindo apos sete voltas"
+      - "Elias desafiando os profetas de Baal no Carmelo"
+      - "Elias alimentado pelos corvos no deserto"
+      - "Naamã, o comandante sírio, curado depois de sete banhos no Jordão"
+      - "Jonas engolido pelo grande peixe"
+      - "Os tres jovens na fornalha ardente"
+      - "Daniel na cova dos leoes"
+      - "A viuva de Sarepta e o pote de farinha que nao acabava"
+
+    # Parabola: o video termina num ensinamento, nao numa virada de acao.
+    # E o grupo menor de proposito: 3 dos 30 videos.
+    reflexao:
+      - "O bom samaritano parando na estrada"
+      - "O filho prodigo voltando para casa"
+      - "O pastor que deixa noventa e nove para buscar uma ovelha"
+      - "O semeador e os quatro tipos de terreno"
+      - "O grao de mostarda que virou arvore"
+      - "As dez virgens e as lampadas sem azeite"
+      - "Os talentos confiados aos tres servos"
+      - "A viuva que deu as duas ultimas moedas"
+      - "O rico e o pobre Lazaro na porta"
+      - "O fariseu e o publicano orando no templo"
+      - "O servo perdoado pelo rei que nao perdoou o companheiro"
+      - "O tesouro escondido no campo"
 
 captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada

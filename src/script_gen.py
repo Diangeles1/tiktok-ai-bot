@@ -611,20 +611,74 @@ def hook_of_the_slot(hooks: list[dict], today: datetime.date | None = None,
     return hooks[(day * max(1, slot_count) + slot_index) % len(hooks)]
 
 
-def topic_of_the_day(topics: list[str], today: datetime.date | None = None,
-                      slot_index: int = 0, slot_count: int = 1) -> str | None:
-    """Escolhe o tema girando pela lista, um por publicacao.
+def categoria_do_slot(mistura: list[list[str]], today: datetime.date | None = None,
+                       slot_index: int = 0) -> str | None:
+    """Diz que tipo de historia sai nesta publicacao (ver "mistura" no config).
 
-    Sem isso o modelo repetiria sempre as historias mais famosas. O indice
-    considera o horario da publicacao, senao as varias execucoes do mesmo dia
-    sairiam com o mesmo tema. Usa o dia absoluto (toordinal) em vez do dia do
-    ano, senao a virada de ano reiniciaria o ciclo no meio. E deterministico:
-    nao guarda estado entre execucoes."""
+    Cada horario tem a sua propria sequencia de tipos e o dia escolhe a posicao,
+    entao quem assiste sempre no mesmo horario encontra sempre o mesmo tipo de
+    video. As tres sequencias juntas dao a proporcao desejada entre os tipos."""
+    if not mistura:
+        return None
+    sequencia = mistura[slot_index % len(mistura)]
+    if not sequencia:
+        return None
+    day = (today or datetime.date.today()).toordinal()
+    return sequencia[day % len(sequencia)]
+
+
+def _usos_anteriores(mistura: list[list[str]], day: int, slot_index: int,
+                      categoria: str) -> int:
+    """Quantas vezes esta categoria ja saiu antes desta publicacao.
+
+    E o que faz o tema andar DENTRO do grupo: sem isso, a categoria que sai a
+    cada tres dias andaria na lista de temas no mesmo passo da que sai todo
+    dia, e as duas repetiriam cedo. Conta por ciclo em vez de percorrer a
+    historia inteira, porque o dia absoluto passa de 700 mil.
+
+    Assume que as sequencias de "mistura" tem todas o mesmo tamanho (10 no
+    config): tamanhos diferentes nao quebram, so mudam a proporcao."""
+    ciclo = len(mistura[0])
+    por_ciclo = sum(sequencia.count(categoria) for sequencia in mistura)
+    total = (day // ciclo) * por_ciclo
+
+    posicao = day % ciclo
+    for anterior in range(posicao):          # dias ja passados deste ciclo
+        for sequencia in mistura:
+            if sequencia[anterior % len(sequencia)] == categoria:
+                total += 1
+    for antes in range(slot_index):          # publicacoes de hoje que ja sairam
+        sequencia = mistura[antes % len(mistura)]
+        if sequencia[posicao % len(sequencia)] == categoria:
+            total += 1
+    return total
+
+
+def topic_of_the_day(topics: dict[str, list[str]], today: datetime.date | None = None,
+                      slot_index: int = 0, slot_count: int = 1,
+                      mistura: list[list[str]] | None = None) -> str | None:
+    """Escolhe o tema do dia: primeiro o tipo de historia, depois o tema dentro
+    dele.
+
+    Sem isso o modelo repetiria sempre as historias mais famosas. Usa o dia
+    absoluto (toordinal) em vez do dia do ano, senao a virada de ano
+    reiniciaria o ciclo no meio. E deterministico: nao guarda estado entre
+    execucoes.
+
+    Sem "mistura" no config, cai para a rotacao antiga: todos os temas numa
+    lista so, sem controle de proporcao entre os tipos."""
     if not topics:
         return None
     day = (today or datetime.date.today()).toordinal()
-    position = day * max(1, slot_count) + slot_index
-    return topics[(position * _spread_stride(len(topics))) % len(topics)]
+
+    categoria = categoria_do_slot(mistura, today, slot_index) if mistura else None
+    if categoria and topics.get(categoria):
+        do_grupo = topics[categoria]
+        posicao = _usos_anteriores(mistura, day, slot_index, categoria)
+    else:
+        do_grupo = [tema for grupo in topics.values() for tema in grupo]
+        posicao = day * max(1, slot_count) + slot_index
+    return do_grupo[(posicao * _spread_stride(len(do_grupo))) % len(do_grupo)]
 
 
 # O prompt pede para nao entregar o fim, e o modelo escreveu "enfrentar um

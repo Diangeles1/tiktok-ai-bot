@@ -108,8 +108,11 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
     dia, slot = _alvo(cfg)
     slot_count = max(1, len(hours))
     # o painel local deixa escolher o tema na mao; sem isso vale a rotacao
+    mistura = script_cfg.get("mistura")
+    categoria = script_gen.categoria_do_slot(mistura, today=dia, slot_index=slot)
     seed_topic = os.environ.get("TEMA", "").strip() or script_gen.topic_of_the_day(
-        script_cfg.get("topics", []), today=dia, slot_index=slot, slot_count=slot_count,
+        script_cfg.get("topics", {}), today=dia, slot_index=slot, slot_count=slot_count,
+        mistura=mistura,
     )
     hook = script_gen.hook_of_the_slot(
         script_cfg.get("hooks", []), today=dia, slot_index=slot, slot_count=slot_count,
@@ -121,7 +124,8 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         script_cfg.get("arcs", []), today=dia, slot_index=slot, slot_count=slot_count,
     )
     print(f"[1/5] Gerando roteiro em cenas (publicacao {slot + 1} de {slot_count}, "
-          f"tema: {seed_topic or 'livre'}, gancho: {hook['name'] if hook else 'livre'}, "
+          f"tipo: {categoria or 'livre'}, tema: {seed_topic or 'livre'}, "
+          f"gancho: {hook['name'] if hook else 'livre'}, "
           f"arco: {arc['name'] if arc else 'livre'}, fase: {phase_name})")
     script = script_gen.generate_scene_script(
         niche=cfg["niche"],
@@ -141,6 +145,7 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
     script["_hook"] = hook["name"] if hook else None
     script["_arc"] = arc["name"] if arc else None
     script["_seed_topic"] = seed_topic
+    script["_categoria"] = categoria
     scenes = script["scenes"]
     print(f"  Tema de hoje: {script['topic']} "
           f"({script_gen.scene_word_count(script)} palavras em {len(scenes)} cenas)")
@@ -323,6 +328,7 @@ def main() -> None:
             "agendar_para": _horario_brasilia(cfg, dia, slot),
             "gancho": script.get("_hook"),
             "arco": script.get("_arc"),
+            "tipo": script.get("_categoria"),
             "fase": phase_name,
             "tema": script.get("_seed_topic"),
             # de onde o modelo disse ter tirado a historia: conferir a

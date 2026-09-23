@@ -537,13 +537,19 @@ class Panel:
             "env_encontrado": os.path.exists(self.env_file),
             "credenciais": credentials,
             "proximo": {
-                "tema": script_gen.topic_of_the_day(script_cfg.get("topics", []),
-                                                    slot_index=slot, slot_count=count),
+                "tema": script_gen.topic_of_the_day(script_cfg.get("topics", {}),
+                                                    slot_index=slot, slot_count=count,
+                                                    mistura=script_cfg.get("mistura")),
                 "gancho": hook["name"] if hook else None,
                 "arco": arc["name"] if arc else None,
+                "tipo": script_gen.categoria_do_slot(script_cfg.get("mistura"),
+                                                     slot_index=slot),
                 "horario_brasilia": ((hours[slot] + BRASILIA_UTC_OFFSET) % 24) if hours else None,
             },
-            "temas": script_cfg.get("topics", []),
+            # o menu de temas do painel e uma lista so: os grupos servem para
+            # a rotacao, nao para quem escolhe o tema na mao
+            "temas": [tema for grupo in script_cfg.get("topics", {}).values()
+                      for tema in grupo],
             "lote": self.batch,
             "plataformas": {
                 "tiktok": {"ativo": tiktok_cfg.get("enabled", True),
