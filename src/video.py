@@ -206,7 +206,12 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
     if music_path:
         music = AudioFileClip(music_path).volumex(music_volume)
         music = audio_loop(music, duration=total)
-        tracks.append(audio_fadeout(music, min(2.0, total / 4)))
+        # sem a narracao por cima, o mesmo volume que era "de fundo" passa a
+        # soar alto sozinho (feedback: "a musica no final ficou muito alta").
+        # A partir do fim da narracao a musica vai sumindo aos poucos, em vez
+        # de segurar o volume ate faltar so 2s pro corte.
+        fade = max(1.0, total - narration_end)
+        tracks.append(audio_fadeout(music, min(fade, total)))
 
     # efeitos de cena (vento, chuva, fanfarra...), bem baixos, para dar corpo
     # ao momento sem competir com a narracao. Cada item: path, start, volume e,
