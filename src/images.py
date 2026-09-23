@@ -17,6 +17,16 @@ from PIL import Image, ImageFont
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
 CLOUDFLARE_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
 CLOUDFLARE_MODEL = "@cf/stabilityai/stable-diffusion-xl-base-1.0"
+# SDXL erra mao com frequencia (testado: 6 dedos numa cena de "medium shot"
+# real do canal). O Flux Schnell acerta anatomia de mao e rosto muito melhor
+# (testado lado a lado com o mesmo tipo de cena), mas so devolve imagem
+# quadrada 1024x1024 e a Cloudflare recusa (400) qualquer campo alem de
+# prompt/steps: nao aceita negative_prompt, largura/altura nem seed. Por isso
+# so entra nas cenas com gente (medium shot), onde o corte central do _fit
+# perde borda mas mantem quem esta no centro; a cena aberta (wide shot,
+# aerial view) continua no SDXL, que aceita a proporcao vertical nativa e
+# evita cortar a paisagem que o enquadramento pede.
+CLOUDFLARE_MODEL_PESSOA = "@cf/black-forest-labs/flux-1-schnell"
 
 # os modelos entregam melhor perto do tamanho em que foram treinados, e o custo
 # cresce com a area: geramos ate esta altura e o video amplia na montagem
@@ -48,14 +58,32 @@ def _gen_size(width: int, height: int) -> tuple[int, int]:
     return out[0], out[1]
 
 
-def _cloudflare_image(prompt: str, width: int, height: int, seed: int) -> bytes:
+def _tem_pessoa(prompt: str) -> bool:
+    """"medium shot" e o unico dos tres enquadramentos permitidos com gente
+    dentro (ver regra das cenas em src/script_gen.py): wide shot e aerial
+    view sao paisagem, onde mao errada nao aparece mas cortar a lateral
+    custaria a cena."""
+    return "medium shot" in prompt.lower()
+
+
+def _cloudflare_image(prompt: str, width: int, height: int, seed: int,
+                       usar_flux: bool = False) -> bytes:
     account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
-    model = os.environ.get("CLOUDFLARE_IMAGE_MODEL", CLOUDFLARE_MODEL)
+    if usar_flux:
+        # a Cloudflare recusa (400) se width/height/negative_prompt/seed forem
+        # enviados para este modelo: testado, ele so aceita prompt e steps.
+        # Sem seed pra fixar, cada tentativa sai de um jeito, o que aqui ate
+        # ajuda: a nova tentativa depois de uma falha nao repete a mesma cena.
+        model = os.environ.get("CLOUDFLARE_IMAGE_MODEL_PESSOA", CLOUDFLARE_MODEL_PESSOA)
+        payload = {"prompt": prompt, "steps": 8}
+    else:
+        model = os.environ.get("CLOUDFLARE_IMAGE_MODEL", CLOUDFLARE_MODEL)
+        payload = {"prompt": prompt, "negative_prompt": NEGATIVE, "width": width,
+                   "height": height, "num_steps": 20, "seed": seed}
     resp = requests.post(
         CLOUDFLARE_URL.format(account=account, model=urllib.parse.quote(model, safe="@/")),
         headers={"Authorization": f"Bearer {os.environ['CLOUDFLARE_API_TOKEN']}"},
-        json={"prompt": prompt, "negative_prompt": NEGATIVE, "width": width,
-              "height": height, "num_steps": 20, "seed": seed},
+        json=payload,
         timeout=180,
     )
     kind = resp.headers.get("Content-Type", "")
@@ -87,8 +115,13 @@ def _pollinations_image(prompt: str, width: int, height: int, seed: int) -> byte
 
 
 def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
-                          seed: int | None = None, retries: int = 4) -> str:
-    """Gera a imagem de uma cena e devolve o caminho do arquivo."""
+                          seed: int | None = None, retries: int = 4,
+                          melhor_mao: bool = True) -> str:
+    """Gera a imagem de uma cena e devolve o caminho do arquivo.
+
+    melhor_mao=True manda a cena com gente ("medium shot") para o Flux
+    Schnell em vez do SDXL: acerta mao e rosto melhor, ao custo de vir
+    quadrada e perder borda no corte do _fit (ver CLOUDFLARE_MODEL_PESSOA)."""
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     provider = _provider()
     if provider == "cloudflare" and not os.environ.get("CLOUDFLARE_API_TOKEN"):
@@ -96,12 +129,14 @@ def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
     full_prompt = f"{prompt}, vertical composition, high detail, no text, no watermark"
     seed = seed if seed is not None else random.randint(1, 999_999)
     gen_width, gen_height = _gen_size(width, height)
+    usar_flux = provider == "cloudflare" and melhor_mao and _tem_pessoa(prompt)
 
     last_exc = None
     for attempt in range(retries):
         try:
             if provider == "cloudflare":
-                content = _cloudflare_image(full_prompt, gen_width, gen_height, seed)
+                content = _cloudflare_image(full_prompt, gen_width, gen_height, seed,
+                                            usar_flux=usar_flux)
             else:
                 content = _pollinations_image(full_prompt, gen_width, gen_height, seed)
             with open(out_path, "wb") as f:

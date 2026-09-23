@@ -8,6 +8,7 @@ pede para colar o token, que vai direto para o .env.
 Uso:
     python -m src.push_secrets
     python -m src.push_secrets --conta-cloudflare --token-cloudflare
+    python -m src.push_secrets --gemini
 """
 import sys
 import webbrowser
@@ -30,7 +31,15 @@ NEW_KEYS = {
                            lambda v: 30 <= len(v) <= 80),
     "--novo-secret-youtube": ("YOUTUBE_CLIENT_SECRET", "Client secret novo do YouTube",
                               lambda v: v.startswith("GOCSPX-") and len(v) > 20),
+    # roteiro alternativo ao da Groq, testado em 2026-09-23 (ver src/script_gen.py).
+    # O formato da chave do AI Studio varia (viu-se tanto "AIza..." quanto
+    # "AQ...."), entao o teste e so por tamanho e ausencia de espaco, como o da
+    # Cloudflare.
+    "--gemini": ("GEMINI_API_KEY", "chave da API do Gemini",
+                 lambda v: 20 <= len(v) <= 80),
 }
+
+GEMINI_KEY_URL = "https://aistudio.google.com/apikey"
 
 
 def _replace_key(env_key: str, label: str, looks_right) -> None:
@@ -45,6 +54,10 @@ def _replace_key(env_key: str, label: str, looks_right) -> None:
 def main() -> None:
     for flag, (env_key, label, looks_right) in NEW_KEYS.items():
         if flag in sys.argv:
+            if flag == "--gemini":
+                print("Abrindo o Google AI Studio para criar a chave gratuita da Gemini.")
+                print(f"Se nao abrir: {GEMINI_KEY_URL}\n")
+                webbrowser.open(GEMINI_KEY_URL)
             _replace_key(env_key, label, looks_right)
     if not credentials.current("GH_PAT"):
         print("Falta o GH_PAT, o token que deixa gravar nos Secrets do GitHub.")

@@ -62,7 +62,7 @@ total = scenes_mod.render_narration(
 )
 print(f"  narracao total: {total:.1f}s")
 
-music_path = sfx.pick_random_music() if sfx_cfg.get("music_enabled", True) else None
+music_path = sfx.pick_music("calmo") if sfx_cfg.get("music_enabled", True) else None
 print(f"  musica: {music_path or 'nenhuma (assets/music vazia)'}")
 
 print("Montando video final...")
@@ -73,6 +73,9 @@ out = video.build_video(
     tmp_dir=f"{run_dir}/_captions",
     laugh_path=sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None,
     laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
+    assinatura_path=(sfx.pick_random_assinatura()
+                     if sfx_cfg.get("assinatura_enabled", True) else None),
+    assinatura_gap=sfx_cfg.get("assinatura_gap_seconds", 0.45),
     caption_bottom_margin=cfg["captions"].get("bottom_margin", 420),
     music_path=music_path,
     music_volume=sfx_cfg.get("music_volume", 0.10),

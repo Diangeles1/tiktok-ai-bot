@@ -40,8 +40,14 @@ def upload_short(client_id: str, client_secret: str, refresh_token: str,
                   category_id: str = "24", privacy_status: str = "public",
                   made_for_kids: bool = False,
                   thumbnail_path: str | None = None,
-                  publish_at: str | None = None) -> dict:
+                  publish_at: str | None = None,
+                  synthetic: bool = True) -> dict:
     """Envia o video como YouTube Short. Retorna o recurso 'video' criado.
+
+    `synthetic` declara conteudo alterado ou sintetico (imagem e narracao de IA).
+    O YouTube exige a declaracao, e desde 2026 a politica de conteudo nao
+    autentico e aplicada no canal inteiro: declarar e parte de continuar
+    monetizavel, nao um detalhe.
 
     `publish_at` (RFC3339 em UTC, ex.: 2026-09-20T09:00:00Z) marca a hora exata
     de publicar: o video sobe privado e o YouTube o torna publico na hora. E o
@@ -64,6 +70,7 @@ def upload_short(client_id: str, client_secret: str, refresh_token: str,
             # com hora marcada o YouTube exige que o video suba privado
             "privacyStatus": "private" if publish_at else privacy_status,
             "selfDeclaredMadeForKids": made_for_kids,
+            "containsSyntheticMedia": synthetic,
         },
     }
     if publish_at:

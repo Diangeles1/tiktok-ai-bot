@@ -1,15 +1,24 @@
-"""Geracao do roteiro diario (texto) usando a API gratuita da Groq."""
+"""Geracao do roteiro diario (texto), na Groq (padrao, gratis) ou na Gemini
+(alternativa gratuita testada em 2026-09-23 por escrever historia mais
+envolvente em portugues; troque com script.provider: "gemini" no config.yaml)."""
 import datetime
 import json
 import math
 import os
 import random
 import re
+import unicodedata
 import time
 
+from google import genai as google_genai
+from google.genai import errors as google_genai_errors
+from google.genai import types as google_genai_types
 from groq import BadRequestError, Groq, RateLimitError
 
 MODEL = "openai/gpt-oss-120b"
+# gemini-2.5-flash: rapido e dentro da cota gratuita do AI Studio (15 req/min,
+# 1500 req/dia), suficiente para os 3 videos diarios do canal.
+GEMINI_MODEL = "gemini-2.5-flash"
 MIN_NARRATION_WORDS = 170
 MAX_ATTEMPTS = 3      # tentativas por narracao curta demais
 JSON_ATTEMPTS = 3     # tentativas por JSON invalido devolvido pelo modelo
@@ -19,6 +28,8 @@ JSON_ATTEMPTS = 3     # tentativas por JSON invalido devolvido pelo modelo
 RATE_LIMIT_ATTEMPTS = 5
 MIN_SCENES = 8
 MAX_SCENES = 14
+# usado para escolher a pasta de musica em assets/music/<clima>/ (ver src/sfx.py)
+CLIMAS = ("tenso", "triunfante", "calmo")
 
 # O gpt-oss e um modelo de raciocinio. No esforco padrao ele gasta o orcamento
 # de tokens raciocinando e o modo JSON falha com "Failed to generate JSON";
@@ -64,14 +75,64 @@ Crie UM video novo e ORIGINAL, narrado em {language}, sobre: {niche}
 Regras da narracao:
 - Somando todas as cenas, de {min_words} a {max_words} palavras (o video precisa
   passar de 1 minuto, requisito minimo de programas de monetizacao).
-- A primeira frase decide se a pessoa fica ou rola o feed. Ela tem que valer
-  sozinha, em menos de dois segundos de fala. Nao comece apresentando contexto
-  ("havia um homem chamado", "em uma terra distante", "muitos anos atras"):
-  isso e o jeito mais rapido de perder o espectador.
+- A primeira frase decide se a pessoa fica ou rola o feed, e hoje e onde o
+  canal perde publico (medido: 92% saem nos primeiros segundos). Ela tem que
+  valer sozinha, em menos de dois segundos de fala. Siga as quatro regras:
+  1. NAO conte o desfecho nem o julgamento final da historia. "Lazaro foi levado
+     ao seio de Abraao enquanto o rico sofria" entrega tudo e tira o motivo de
+     ficar. Mostre a situacao ANTES da virada. Nem de raspao: "ja viu um
+     adolescente enfrentar um gigante e VENCER so com uma pedra?" tambem
+     entrega, porque diz que ele venceu. Sem os verbos vencer, derrotar, matar,
+     salvar, libertar e triunfar na primeira frase.
+  2. NAO comece apresentando contexto ("havia um homem chamado", "em uma terra
+     distante", "muitos anos atras").
+  3. Palavras do dia a dia. Nada de "jaz", "outrora", "eis que", "escuridao
+     eterna". Escreva como se contasse para um amigo no portao de casa.
+
+  Essa mesma regra 3 vale para a historia INTEIRA, nao so a primeira frase.
+  Nada de "conduziu" (leve, levou), "perplexo" (sem entender nada, pasmo),
+  "boquiaberto" (de boca aberta, chocado), "exaltado" (aclamado, celebrado
+  tambem sao formais: use "todo mundo comemorou", "viraram herois"). Se voce
+  nao usaria a palavra numa conversa de verdade, troque por uma que usaria.
+  Realista e social: gente comum reagindo, sem narrador de documentario.
+  4. Termine deixando uma pergunta no ar, sem fazer a pergunta. Exemplo bom:
+     "Um mendigo dormia no portao do homem mais rico da cidade. Nenhum dos dois
+     imaginava quem seria lembrado depois."
 - Depois da primeira frase, e antes de comecar a historia, diga em UMA frase
-  curta de onde ela vem, como se fala em voz alta: "Esta em Lucas 18, versiculos
-  9 a 14." Tem que ser exatamente a mesma referencia do campo "passagem".
-- Final que deixe a pessoa querendo o proximo video, sem parecer propaganda.
+  curta de onde ela vem, como se fala em voz alta: "Está em Lucas 18, versiculos
+  9 a 14." (com acento: e o verbo estar, "esta" sem acento e outra palavra).
+  Tem que ser exatamente a mesma referencia do campo "passagem". Essa
+  frase fica DENTRO da primeira cena, colada no gancho, e nao pode ser uma cena
+  sozinha nem ganhar enfeite ("onde o duelo acontece", "uma das passagens mais
+  conhecidas"). Diz de onde vem e segue a historia.
+- Conte UM momento da passagem, nao o capitulo inteiro. Capitulo resumido vira
+  lista de acontecimentos e a pessoa nao se liga em nenhum deles. Escolha a cena
+  que decide tudo e mostre o que aconteceu ali: quem estava, o que fez, o que
+  disse, o que mudou. O resto da passagem so entra se for preciso para entender
+  esse momento.
+- Antes da acao, a cena seguinte ao gancho planta o chao da historia em uma ou
+  duas frases: quem esta contra quem, e o que a pessoa tem a perder. Sem isso a
+  narracao comeca no meio ("respondeu ao rei" sem dizer quem era o rei, nem
+  qual era o desafio) e quem assiste nao tem como se importar.
+- Nao repita em uma cena o que a cena anterior ja contou, nem com outras
+  palavras. Se o gigante ja caiu, a cena seguinte mostra a consequencia, nao a
+  queda outra vez.
+- Nome de personagem em portugues: Davi, Moises, Josue, Pedro, Joao, Tome,
+  Maria. Nunca David, Moses, Joshua, Peter, John.
+- Sem comparacao de enfeite que nao diz nada ("caiu como arvore caida",
+  "precisao mortal"). Fato simples, palavra do dia a dia.
+- A moral aparece UMA vez, na ultima cena, em uma frase. Se a cena anterior ja
+  disse o que a historia ensina, a ultima nao repete com outras palavras.
+- Cada cena tem que acrescentar um fato concreto: alguem faz, diz ou descobre
+  alguma coisa. Nao gaste cena com atmosfera vaga ("um silencio estranho tomou
+  conta", "como se o lugar guardasse seu proprio lamento"). Isso ocupa o tempo
+  da historia sem contar nada dela.
+- A ULTIMA cena fecha a historia: diga o que aconteceu com quem viveu aquilo e o
+  que mudou depois, com fato, e so entao uma frase curta do que isso significa.
+  Sem desfecho a pessoa sente que o video acabou no meio.
+- A ultima frase NUNCA e pergunta, e nunca e formula vaga do tipo "qual sera o
+  proximo passo", "e voce, o que faria" ou "a escolha e sua". Termine com uma
+  afirmacao que so cabe nesta historia, usando as palavras dela.
 - Antes de escrever, identifique de onde a historia vem: livro, capitulo e
   versiculos da Biblia, ou a fonte da tradicao no caso de santo. Registre no
   campo "passagem" e conte o que ESSA passagem diz. Nao misture detalhes de
@@ -84,6 +145,8 @@ Regras da narracao:
 
 Regras das cenas:
 - Divida a narracao em {min_scenes} a {max_scenes} cenas, cada uma com 2 a 4 frases.
+- Nenhuma cena com menos de 13 palavras nem mais de 32. Cena de uma linha so,
+  no meio de cenas longas, corta o folego da narracao.
 - Cada cena tem uma descricao visual ("visual") escrita EM INGLES, porque ela vai
   alimentar um gerador de imagens. Descreva coisa concreta: lugar, objeto, clima,
   luz, angulo.
@@ -111,6 +174,16 @@ Regras das cenas:
   Os personagens biblicos sao retratados como arte, nao como foto de alguem.
 - O visual precisa combinar com o que esta sendo narrado naquele trecho.
 
+Regra do clima (campo "clima", usada para escolher a musica de fundo):
+- Classifique o TOM GERAL desta historia, depois de pronta, em uma destas tres
+  palavras: "tenso", "triunfante" ou "calmo".
+- "tenso": trata de perigo, injustica ou conflito que ainda pesa no final
+  (ex.: Jesus calado diante de Pilatos, a traicao de Judas).
+- "triunfante": termina em vitoria, resgate, milagre ou virada celebrada
+  (ex.: Davi contra Golias, Lazaro chamado de volta do tumulo).
+- "calmo": nem um nem outro, historia de encontro ou ensinamento sem tensao
+  nem virada explosiva (ex.: a samaritana no poco, o bom samaritano).
+
 Regras da capa (campo "thumbnail", o ultimo do JSON):
 - Escreva a capa DEPOIS das cenas, como resumo do que voce acabou de narrar.
 - Uma frase curta que se le de uma vez, de 3 a 6 palavras, com gramatica e
@@ -123,6 +196,14 @@ Regras da capa (campo "thumbnail", o ultimo do JSON):
   (recusar perdao nao e trair, duvidar nao e negar) e nao atribua a ninguem
   culpa, motivo ou resultado que o texto nao registra.
 
+Regras do titulo (campo "caption", que vira o titulo do video):
+- Ate 70 caracteres, com o NOME de quem vive a historia e o conflito concreto.
+  "O rico ignorou Lazaro. Depois foi tarde" funciona; "Quando o luxo encontra a
+  pobreza, o destino revela sua justica" nao diz quem nem o que aconteceu.
+- Nunca comece com "Quando", "Descubra", "A historia de" ou "Voce sabia".
+- Sem ponto final, sem emoji, sem hashtag e sem caixa alta.
+- Nao entregue o desfecho: o titulo promete a historia, nao o fim dela.
+
 Regras das hashtags (campo "hashtags"):
 - Duas, do mais especifico para o menos: o personagem principal e o tema da
   historia, sem acento (ex.: #Moises, #MarVermelho).
@@ -133,8 +214,9 @@ Responda APENAS com um JSON valido no formato:
 {{
   "topic": "assunto especifico do video de hoje",
   "passagem": "livro, capitulo e versiculos da historia contada, ou a fonte da tradicao",
-  "caption": "legenda curta e chamativa (max 150 caracteres)",
+  "caption": "titulo com nome e conflito, ate 70 caracteres",
   "hashtags": ["#Personagem", "#Tema"],
+  "clima": "tenso, triunfante ou calmo",
   "scenes": [
     {{"narration": "trecho narrado desta cena", "visual": "image prompt in English"}}
   ],
@@ -157,16 +239,37 @@ _PUNCTUATION_FIXES = {
 }
 
 
+# "esta" (demonstrativo, "esta casa") nunca vem antes de "em": quem aparece
+# nesse formato e sempre o verbo estar da frase de referencia ("Esta em Lucas
+# 18..."). O modelo erra essa acentuacao com frequencia mesmo com a regra no
+# prompt (ver SCENE_PROMPT_TEMPLATE); a troca aqui e deterministica e segura,
+# nao precisa gastar uma tentativa nova so por causa dela.
+_ESTA_SEM_ACENTO_RE = re.compile(r"\bEsta(?=\s+em\s)")
+
+
 def sanitize(value):
-    """Troca pontuacao tipografica pela equivalente comum, em todo texto que o
-    modelo devolveu (funciona recursivamente em dict e lista)."""
+    """Troca pontuacao tipografica pela equivalente comum e corrige o acento de
+    "Esta em" (ver _ESTA_SEM_ACENTO_RE), em todo texto que o modelo devolveu
+    (funciona recursivamente em dict e lista)."""
     if isinstance(value, str):
-        return value.translate(_PUNCTUATION_FIXES)
+        texto = value.translate(_PUNCTUATION_FIXES)
+        return _ESTA_SEM_ACENTO_RE.sub("Está", texto)
     if isinstance(value, dict):
         return {k: sanitize(v) for k, v in value.items()}
     if isinstance(value, list):
         return [sanitize(v) for v in value]
     return value
+
+
+def texto_corrompido(script: dict) -> bool:
+    """True se algum texto do roteiro (narracao, passagem, titulo...) tiver o
+    caractere de substituicao U+FFFD: sinal de que o modelo emitiu um token
+    quebrado no meio do texto (visto na pratica em "versiculos" -> "vers?culos").
+    Vale a pena tentar de novo, o defeito e raro mas visivel demais para publicar."""
+    textos = [script.get("topic", ""), script.get("passagem", ""),
+              script.get("caption", ""), script.get("thumbnail", "")]
+    textos += [c.get("narration", "") for c in script.get("scenes", [])]
+    return any("�" in t for t in textos)
 
 
 def _is_malformed_json_error(exc: Exception) -> bool:
@@ -239,7 +342,39 @@ def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
                   f"({attempt}/{JSON_ATTEMPTS}).")
 
 
-def _request_scene_script(client: Groq, model: str, niche: str, language: str,
+def _ask_for_json_gemini(client: "google_genai.Client", model: str, prompt: str) -> dict:
+    """Mesma promessa do _ask_for_json, na Gemini: JSON valido, com retentativa
+    em erro de formato e em limite de taxa (429, plano gratuito)."""
+    config = google_genai_types.GenerateContentConfig(
+        response_mime_type="application/json",
+        temperature=0.95,
+    )
+    attempt = 0
+    rate_limited = 0
+    while True:
+        try:
+            response = client.models.generate_content(model=model, contents=prompt, config=config)
+            return sanitize(json.loads(response.text))
+        except google_genai_errors.ClientError as exc:
+            if exc.code == 429:
+                rate_limited += 1
+                if rate_limited > RATE_LIMIT_ATTEMPTS:
+                    raise
+                wait = min(60.0, 5.0 * 2 ** (rate_limited - 1))
+                print(f"  [script] limite de taxa da Gemini, esperando {wait:.0f}s "
+                      f"({rate_limited}/{RATE_LIMIT_ATTEMPTS}).")
+                time.sleep(wait)
+                continue
+            raise
+        except json.JSONDecodeError:
+            attempt += 1
+            if attempt >= JSON_ATTEMPTS:
+                raise
+            print(f"  [script] o modelo devolveu JSON invalido, tentando de novo "
+                  f"({attempt}/{JSON_ATTEMPTS}).")
+
+
+def _request_scene_script(ask_fn, niche: str, language: str,
                            min_words: int, max_words: int, seed_topic: str | None,
                            extra_rules: str | None = None,
                            hook: dict | None = None, arc: dict | None = None,
@@ -271,7 +406,7 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
     else:
         prompt += f"\nEvite temas obvios/repetidos. Semente aleatoria: {random.randint(1, 999999)}\n"
 
-    data = _ask_for_json(client, model, prompt)
+    data = ask_fn(prompt)
 
     scenes = data.get("scenes")
     if not scenes or not isinstance(scenes, list):
@@ -281,6 +416,7 @@ def _request_scene_script(client: Groq, model: str, niche: str, language: str,
             raise ValueError(f"Cena incompleta na resposta do LLM: {scene}")
 
     enforce_wide_framing(scenes)
+    warn_repeated_sentences(scenes)
     return data
 
 
@@ -296,6 +432,58 @@ _CLOSEUP_RE = re.compile(
 _BODY_RE = re.compile(
     r"\b(?:hands?|feet|foot|eyes?|fingers?|arms?|legs?|skin|lips?|mouth|"
     r"palms?|shoulders?|forearms?)\b", re.IGNORECASE)
+
+
+# palavras de livro antigo: soam distantes no formato curto e o publico rola.
+# So aviso, sem reescrever: trocar palavra no automatico ja quebrou sentido antes.
+PALAVRAS_DISTANTES = (
+    "jaz", "jazia", "jaziam", "outrora", "eis que", "porventura",
+    "acaso", "sobremaneira", "deveras", "escuridao eterna",
+    "escuridão eterna", "tormento eterno",
+    # saíram no meio da narracao (nao so na abertura) em execucao real, longe
+    # do "conversa de verdade" que a regra 3 pede: literario, nao social.
+    "conduziu", "conduzia", "perplexo", "perplexa", "boquiaberto",
+    "boquiaberta", "exaltado", "exaltada", "destarte", "doravante",
+    "consoante", "assaz", "mister",
+)
+
+
+def warn_distant_words(scenes: list[dict]) -> list[str]:
+    """Avisa quando a narracao usa palavra de linguagem literaria/distante.
+
+    Cobre a historia inteira, nao so a abertura: o pedido e linguagem social
+    do comeco ao fim, e essas palavras ja saíram tanto no meio quanto no fim
+    de execucoes reais."""
+    achadas = []
+    texto = " ".join(s.get("narration", "") for s in scenes).lower()
+    for palavra in PALAVRAS_DISTANTES:
+        if re.search(r"\b" + re.escape(palavra) + r"\b", texto):
+            achadas.append(palavra)
+    for palavra in achadas:
+        print(f"  [script] AVISO: a narracao usa \"{palavra}\", que soa distante "
+              f"no formato curto.")
+    return achadas
+
+
+def warn_repeated_sentences(scenes: list[dict]) -> list[str]:
+    """Avisa quando a mesma frase aparece em mais de uma cena.
+
+    O modelo as vezes repete a frase de efeito na cena seguinte, e no video
+    isso soa como se a voz tivesse repetido sozinha."""
+    vistas: dict[str, int] = {}
+    repetidas = []
+    for i, scene in enumerate(scenes):
+        for frase in re.split(r"(?<=[.!?])\s+", scene.get("narration", "")):
+            chave = " ".join(frase.lower().split())
+            if len(chave.split()) < 4:
+                continue
+            if chave in vistas:
+                repetidas.append(f"cena {vistas[chave] + 1} e cena {i + 1}: \"{frase.strip()}\"")
+            else:
+                vistas[chave] = i
+    for aviso in repetidas:
+        print(f"  [script] AVISO: frase repetida ({aviso})")
+    return repetidas
 
 
 def enforce_wide_framing(scenes: list[dict]) -> int:
@@ -431,30 +619,104 @@ def topic_of_the_day(topics: list[str], today: datetime.date | None = None,
     return topics[(position * _spread_stride(len(topics))) % len(topics)]
 
 
+# O prompt pede para nao entregar o fim, e o modelo escreveu "enfrentar um
+# gigante e vencer so com uma pedra" na primeira execucao com as regras novas.
+# Como no enquadramento fechado, a regra que o modelo furou virou trava aqui.
+_FIM_NO_GANCHO_RE = re.compile(
+    r"\b(?:vence|venceu|vencer|vencendo|derrota|derrotou|derrotar|derrotando|"
+    r"matou|matar|matando|salvou|salvar|salvando|libertou|libertar|libertando|"
+    r"triunfou|triunfar|humilhou|humilhar)\b", re.IGNORECASE)
+
+
+# Frases que o modelo repete mesmo com a regra no prompt. Cada uma entrou aqui
+# depois de sair em execucao real.
+_CLICHES = (
+    "como arvore caida", "como uma arvore caida", "precisao mortal",
+    "silencio estranho", "mudar destinos",
+)
+
+
+def _sem_acento(texto: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", texto.lower())
+                    if unicodedata.category(c) != "Mn")
+
+
+def cliche_na_narracao(cenas: list[dict]) -> str | None:
+    """Devolve o cliche encontrado na narracao, se houver."""
+    texto = _sem_acento(" ".join(c.get("narration", "") for c in cenas))
+    for frase in _CLICHES:
+        if frase in texto:
+            return frase
+    return None
+
+
+def hook_entrega_fim(primeira_cena: str) -> str | None:
+    """Devolve a palavra que entrega o desfecho na primeira frase, se houver."""
+    primeira_frase = re.split(r"(?<=[.!?])\s", primeira_cena.strip(), maxsplit=1)[0]
+    achado = _FIM_NO_GANCHO_RE.search(primeira_frase)
+    return achado.group(0) if achado else None
+
+
+def scene_mood(script: dict) -> str:
+    """Clima da historia (ver CLIMAS), normalizado; "calmo" se o modelo nao
+    mandar um valor valido no campo "clima"."""
+    clima = str(script.get("clima", "")).strip().lower()
+    return clima if clima in CLIMAS else "calmo"
+
+
 def generate_scene_script(niche: str, language: str, seed_topic: str | None = None,
-                           model: str = MODEL, min_words: int = MIN_NARRATION_WORDS,
+                           model: str | None = None, provider: str = "groq",
+                           min_words: int = MIN_NARRATION_WORDS,
                            max_words: int = 220, extra_rules: str | None = None,
                            hook: dict | None = None, arc: dict | None = None,
                            min_scenes: int = MIN_SCENES, max_scenes: int = MAX_SCENES,
                            cta: str | None = None) -> dict:
     """Gera o roteiro do dia dividido em cenas, para o formato narrado sobre
     imagens que mudam. Mesma politica de retentativa do formato de personagem:
-    narracao curta demais nao passa de 1 minuto e perde a monetizacao."""
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    narracao curta demais nao passa de 1 minuto e perde a monetizacao.
+
+    provider="gemini" usa a Gemini em vez da Groq (ver GEMINI_MODEL); precisa
+    de GEMINI_API_KEY no .env (python -m src.push_secrets --gemini)."""
+    if provider == "gemini":
+        model = model or GEMINI_MODEL
+        client = google_genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        ask_fn = lambda prompt: _ask_for_json_gemini(client, model, prompt)
+    else:
+        model = model or MODEL
+        client = Groq(api_key=os.environ["GROQ_API_KEY"])
+        ask_fn = lambda prompt: _ask_for_json(client, model, prompt)
 
     best = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        data = _request_scene_script(client, model, niche, language, min_words,
+        data = _request_scene_script(ask_fn, niche, language, min_words,
                                       max_words, seed_topic, extra_rules, hook, arc,
                                       min_scenes, max_scenes, cta)
         word_count = scene_word_count(data)
-        if word_count >= min_words:
+        entrega = hook_entrega_fim(data["scenes"][0]["narration"])
+        cliche = cliche_na_narracao(data["scenes"])
+        distantes = warn_distant_words(data["scenes"])
+        corrompido = texto_corrompido(data)
+        if (word_count >= min_words and not entrega and not cliche and not distantes
+                and not corrompido):
             return data
 
         if best is None or word_count > scene_word_count(best):
             best = data
-        print(f"  [script] narracao com {word_count} palavras (minimo {min_words}). "
-              f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
+        if corrompido:
+            print(f"  [script] o modelo devolveu um caractere quebrado no texto. "
+                  f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
+        elif entrega:
+            print(f'  [script] o gancho entregava o fim ("{entrega}"). '
+                  f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
+        elif cliche:
+            print(f'  [script] cliche na narracao ("{cliche}"). '
+                  f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
+        elif distantes:
+            print(f"  [script] linguagem distante na narracao ({', '.join(distantes)}). "
+                  f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
+        else:
+            print(f"  [script] narracao com {word_count} palavras (minimo {min_words}). "
+                  f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
 
     print(f"  [script] AVISO: seguindo com {scene_word_count(best)} palavras. "
           f"O video pode ficar abaixo de 1 minuto e nao se qualificar para monetizacao.")

@@ -26,6 +26,10 @@ from src.env_file import ENV_FILE
 OUTPUT_DIR = "output"
 BRASILIA_UTC_OFFSET = -3
 
+# Qual canal esta rodando. O segundo canal usa outro arquivo (e outro .env, com
+# as chaves da outra conta), sem duplicar uma linha de codigo.
+CONFIG_FILE = os.environ.get("CONFIG_FILE") or "config.yaml"
+
 # o que cada plataforma precisa para publicar. Conferido antes de qualquer
 # chamada de rede, para faltar chave virar uma mensagem clara e nao um KeyError
 REQUIRED_ENV = {
@@ -41,7 +45,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 def load_config() -> dict:
-    with open("config.yaml", "r", encoding="utf-8") as f:
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -149,6 +153,7 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         out_dir=os.path.join(run_dir, "scenes"),
         seed=cfg["scenes"].get("seed"),
         personas=cfg.get("personagens"),
+        melhor_mao=cfg["scenes"].get("melhor_mao", True),
     )
     return script, scenes
 
@@ -200,6 +205,7 @@ def main() -> None:
     total = scenes_mod.render_narration(
         scenes, cfg["tts_voice"], os.path.join(run_dir, "narration"),
         rate=cfg.get("tts_rate"), gap=scene_gap,
+        provider=cfg.get("tts_provider", "edge"),
     )
     # a contagem de palavras do roteiro e so uma estimativa; a duracao do audio
     # e o numero que decide se o video se qualifica para a monetizacao
@@ -220,17 +226,58 @@ def main() -> None:
     if brand.get("watermark_enabled", True) and brand.get("handle") in (None, "", "@canal"):
         print("  AVISO: branding.handle ainda e o placeholder. Troque pelo @ real "
               "do canal no config.yaml antes de publicar.")
+    # a voz do dono fechando o video: sorteada entre as gravacoes de assets/voz
+    assinatura = (sfx.pick_random_assinatura()
+                  if sfx_cfg.get("assinatura_enabled", True) else None)
+    subscribe_text = None
+    if assinatura:
+        print(f"  Assinatura de voz: {os.path.basename(assinatura)}")
+    elif sfx_cfg.get("assinatura_enabled", True):
+        # sem gravacao ainda: um cartao de texto pede a inscricao no lugar da
+        # voz (ver video.build_video, subscribe_text). Troque quando gravar.
+        subscribe_text = brand.get("subscribe_text",
+                                    "Curtiu? Deixa o like e se inscreve para mais historias")
+        print("  AVISO: assets/voz esta vazia, usando cartao de texto no lugar. Grave o "
+              "fecho do canal na sua voz quando puder: e a camada humana que o YouTube "
+              "cobra de quem produz com IA.")
+
+    # clima da historia (script_gen.CLIMAS) escolhe a pasta de musica e o
+    # efeito de virada no fim; so faz sentido no modo "cenas", que e quem
+    # preenche o campo "clima" e a descricao visual de cada cena
+    clima = script_gen.scene_mood(script) if mode == "cenas" else "calmo"
+    extra_sfx = []
+    if sfx_cfg.get("sfx_enabled", True) and mode == "cenas":
+        crossfade = cfg["video"].get("crossfade_seconds", 0.4)
+        # cada cena pode puxar um efeito diferente (chuva, agua, multidao...),
+        # preso a duracao DELA: sem isso o efeito tocaria ate o fim do video em
+        # vez de sumir quando a cena muda (ver src.sfx.ambience_for_scene)
+        for scene in scenes:
+            ambiente = sfx.ambience_for_scene(scene.get("visual", ""))
+            if ambiente:
+                extra_sfx.append({"path": ambiente, "start": scene["start"],
+                                  "duration": scene["duration"] + crossfade, "volume": 0.12})
+        virada = sfx.resolution_cue(clima)
+        if virada:
+            extra_sfx.append({"path": virada, "start": scenes[-1]["start"], "volume": 0.22})
+        print(f"  Clima: {clima}" + (f" ({len(extra_sfx)} efeito(s) de cena)" if extra_sfx else ""))
+
     video.build_video(
         scenes, width, height, cfg["video"]["fps"], video_path,
         words_per_chunk=captions_cfg.get("words_per_chunk", 3),
         zoom_effect=cfg["video"].get("zoom_effect", True),
+        parallax_effect=cfg["video"].get("parallax_effect", True),
         tmp_dir=os.path.join(run_dir, "_captions"),
         laugh_path=sfx.pick_random_laugh() if sfx_cfg.get("laugh_enabled", True) else None,
         laugh_gap=sfx_cfg.get("laugh_gap_seconds", 0.4),
+        assinatura_path=assinatura,
+        assinatura_gap=sfx_cfg.get("assinatura_gap_seconds", 0.45),
+        subscribe_text=subscribe_text,
         caption_bottom_margin=captions_cfg.get("bottom_margin", 420),
-        music_path=sfx.pick_random_music() if sfx_cfg.get("music_enabled", True) else None,
+        music_path=sfx.pick_music(clima) if sfx_cfg.get("music_enabled", True) else None,
         music_volume=sfx_cfg.get("music_volume", 0.10),
+        extra_sfx=extra_sfx,
         crossfade=cfg["video"].get("crossfade_seconds", 0.4),
+        tail=cfg["video"].get("tail_seconds", 1.2),
         color_boost=cfg["video"].get("color_boost", 1.0),
         watermark=(brand.get("handle") if brand.get("watermark_enabled", True) else None),
         watermark_opacity=brand.get("watermark_opacity", 0.35),
@@ -282,6 +329,9 @@ def main() -> None:
             # referencia e o jeito rapido de pegar distorcao antes do publico
             "passagem": script.get("passagem"),
             "primeira_frase": scenes[0]["narration"],
+            # o texto narrado, cena por cena: e por aqui que se confere uma
+            # frase repetida ou um trecho estranho depois de assistir
+            "narracao": [s["narration"] for s in scenes],
             "duracao_segundos": round(total, 1),
             "hashtags": tags,
             "titulo_youtube": youtube_title,
@@ -445,6 +495,7 @@ def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg:
         made_for_kids=youtube_cfg.get("made_for_kids", False),
         thumbnail_path=thumbnail_path,
         publish_at=publish_at,
+        synthetic=youtube_cfg.get("conteudo_sintetico", True),
     )
     url = f"https://youtube.com/shorts/{result['id']}"
     if publish_at:
