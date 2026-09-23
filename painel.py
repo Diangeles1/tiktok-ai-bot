@@ -9,6 +9,8 @@ que nunca sao enviadas para a pagina. A geracao e a publicacao rodam o mesmo
 main.py do GitHub Actions, entao o video sai igual ao da publicacao automatica.
 
 Uso:  python painel.py
+      python painel.py --celular   (abre tambem para o celular no mesmo wi-fi,
+                                    protegido por um codigo de 6 digitos)
 """
 import argparse
 import base64
@@ -17,6 +19,7 @@ import json
 import os
 import re
 import secrets
+import socket
 import subprocess
 import sys
 import threading
@@ -43,6 +46,12 @@ SCENE_RE = re.compile(r"\[cena \d+/(\d+)\]")
 MAX_BODY_BYTES = 64 * 1024
 PLATFORMS = ("tiktok", "youtube")
 
+# modo celular: o codigo e curto para caber na digitacao, entao a porta trava
+# depois de poucos erros. Quem esta na rede nao tem tentativas infinitas.
+PIN_MAX_ERROS = 8
+PIN_TRAVA_SEGUNDOS = 120
+COOKIE_HORAS = 12
+
 # o painel mostra se cada chave existe, nunca o valor
 CREDENTIALS = {
     "groq": ("GROQ_API_KEY",),
@@ -61,7 +70,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 def load_config() -> dict:
-    with open(os.path.join(ROOT, "config.yaml"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, os.environ.get("CONFIG_FILE") or "config.yaml"),
+              encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -344,6 +354,10 @@ class Panel:
     def __init__(self, env_file: str):
         self.env_file = env_file
         self.token = secrets.token_urlsafe(24)
+        # codigo do celular: curto de proposito, quem digita esta no seu wi-fi
+        self.pin = "".join(secrets.choice("0123456789") for _ in range(6))
+        self.erros_pin = 0
+        self.travado_ate = 0.0
         self.job: Job | None = None
         self.lock = threading.Lock()
         self.tiktok = TikTokAccount(self)
@@ -556,9 +570,59 @@ class Handler(BaseHTTPRequestHandler):
 
     def _host_ok(self) -> bool:
         # barra DNS rebinding: um site externo apontando o proprio dominio para
-        # 127.0.0.1 chegaria aqui com outro Host
+        # 127.0.0.1 (ou para o IP da maquina na rede) chegaria aqui com outro Host
         port = self.server.server_address[1]
-        return self.headers.get("Host", "") in (f"127.0.0.1:{port}", f"localhost:{port}")
+        host = self.headers.get("Host", "")
+        nome = host.rsplit(":", 1)[0].strip("[]") if host.endswith(f":{port}") else ""
+        return nome in self.server.hosts_ok
+
+    def _tem_acesso(self) -> bool:
+        """No modo celular, cada pedido precisa provar que veio do painel."""
+        if not self.server.celular:
+            return True
+        token = self.panel.token
+        if secrets.compare_digest(self.headers.get("X-Painel-Token", ""), token):
+            return True
+        for pedaco in self.headers.get("Cookie", "").split(";"):
+            nome, _, valor = pedaco.strip().partition("=")
+            if nome == "painel" and secrets.compare_digest(valor, token):
+                return True
+        return False
+
+    def _pin_ok(self, digitado: str) -> bool:
+        """Confere o codigo e trava a porta depois de uma sequencia de erros."""
+        with self.panel.lock:
+            if time.time() < self.panel.travado_ate:
+                return False
+            if digitado and secrets.compare_digest(digitado, self.panel.pin):
+                self.panel.erros_pin = 0
+                return True
+            if digitado:
+                self.panel.erros_pin += 1
+                if self.panel.erros_pin >= PIN_MAX_ERROS:
+                    self.panel.erros_pin = 0
+                    self.panel.travado_ate = time.time() + PIN_TRAVA_SEGUNDOS
+                    print(f"AVISO: {PIN_MAX_ERROS} codigos errados. "
+                          f"Painel travado por {PIN_TRAVA_SEGUNDOS}s.")
+            return False
+
+    def _send_login(self, errado: bool = False) -> None:
+        espera = int(max(0, self.panel.travado_ate - time.time()))
+        if espera:
+            recado = f"Muitas tentativas. Espere {espera} segundos."
+        elif errado:
+            recado = "Codigo errado."
+        else:
+            recado = "O codigo aparece na janela do painel, no PC."
+        body = PAGE_LOGIN.replace("{{RECADO}}", recado).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Security-Policy",
+                         "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _send_json(self, data, status: int = 200) -> None:
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -576,6 +640,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if self.server.celular:
+            # o player de video pede /arquivos/ direto, sem passar pelo codigo
+            # da pagina: o cookie e o que autoriza esses pedidos
+            self.send_header("Set-Cookie",
+                             f"painel={self.panel.token}; Path=/; HttpOnly; "
+                             f"SameSite=Lax; Max-Age={COOKIE_HORAS * 3600}")
         # a pagina tem o botao de publicar: nenhum outro site pode embuti-la
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; script-src 'self' 'unsafe-inline'; "
@@ -645,7 +715,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"erro": "host nao permitido"}, 403)
         url = urlparse(self.path)
         if url.path == "/":
-            return self._send_page()
+            if self._tem_acesso():
+                return self._send_page()
+            digitado = parse_qs(url.query).get("c", [""])[0].strip()
+            if self._pin_ok(digitado):
+                return self._send_page()
+            return self._send_login(errado=bool(digitado))
+        if not self._tem_acesso():
+            return self._send_json({"erro": "sem acesso, abra o painel de novo"}, 403)
         if url.path == "/api/estado":
             return self._send_json(self.panel.state())
         if url.path == "/api/execucoes":
@@ -730,8 +807,81 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"erro": "nao encontrado"}, 404)
 
 
+PAGE_LOGIN = """<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel do canal</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+         background: #f5f2ec; color: #1f1b16;
+         font: 16px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  form { background: #fff; padding: 28px 24px; border-radius: 14px; width: 260px;
+         box-shadow: 0 2px 16px rgba(0,0,0,.08); text-align: center; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  p { color: #6d655a; font-size: 14px; margin: 0 0 18px; }
+  input { width: 100%; box-sizing: border-box; padding: 12px; font-size: 24px;
+          text-align: center; letter-spacing: 6px; border: 1px solid #e6dfd3;
+          border-radius: 10px; background: #faf7f2; color: inherit; }
+  button { width: 100%; margin-top: 12px; padding: 12px; font-size: 16px;
+           border: 0; border-radius: 10px; background: #a8731f; color: #fff; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #14120f; color: #f2ece2; }
+    form { background: #1d1a15; box-shadow: none; }
+    p { color: #a79d8e; }
+    input { background: #14120f; border-color: #3a342b; }
+  }
+</style></head>
+<body><form method="get" action="/">
+  <h1>Painel do canal</h1>
+  <p>{{RECADO}}</p>
+  <input name="c" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+         autocomplete="off" autofocus placeholder="000000">
+  <button type="submit">Entrar</button>
+</form></body></html>
+"""
+
+
+def ip_da_rede() -> str | None:
+    """IP desta maquina no wi-fi, que e o endereco que o celular precisa usar."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 53))   # UDP: escolhe a placa de rede, nao envia nada
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def porta_ocupada(porta: int) -> bool:
+    """Alguem ja atende nessa porta na propria maquina?
+
+    No Windows, ligar em 0.0.0.0 nao esbarra em quem ligou so em 127.0.0.1: os
+    dois sobem calados e o celular acabaria falando com outro painel.
+    """
+    try:
+        with socket.create_connection(("127.0.0.1", porta), 0.3):
+            return True
+    except OSError:
+        return False
+
+
+def mostra_qr(url: str) -> None:
+    """QR code no terminal: a camera do celular abre o painel sem digitacao."""
+    try:
+        import qrcode
+    except ImportError:
+        print("Sem QR code aqui (pip install qrcode). Digite o endereco no celular.")
+        return
+    codigo = qrcode.QRCode(border=1)
+    codigo.add_data(url)
+    codigo.print_ascii(invert=True)
+
+
 class Server(ThreadingHTTPServer):
     daemon_threads = True
+    celular = False
+    hosts_ok = frozenset({"127.0.0.1", "localhost"})
     # no Windows, reusar o endereco deixa dois processos ouvindo a mesma porta
     # em silencio, e a pagina falaria com o painel errado
     allow_reuse_address = os.name != "nt"
@@ -744,12 +894,24 @@ def main() -> None:
                         help="arquivo de chaves (padrao: .env do projeto)")
     parser.add_argument("--sem-navegador", action="store_true",
                         help="nao abre o navegador sozinho")
+    parser.add_argument("--celular", action="store_true",
+                        help="deixa o painel acessivel do celular no mesmo wi-fi")
+    parser.add_argument("--config", default=os.environ.get("CONFIG_FILE") or "config.yaml",
+                        help="config do canal (padrao: config.yaml)")
     args = parser.parse_args()
+    # o main.py roda como processo separado e le esta variavel
+    os.environ["CONFIG_FILE"] = args.config
+
+    ip = ip_da_rede() if args.celular else None
+    if args.celular and not ip:
+        sys.exit("Nao achei o IP desta maquina na rede. Conecte o PC ao wi-fi e tente de novo.")
 
     server = None
     for port in range(args.porta, args.porta + 10):
+        if args.celular and porta_ocupada(port):
+            continue
         try:
-            server = Server(("127.0.0.1", port), Handler)
+            server = Server(("0.0.0.0" if args.celular else "127.0.0.1", port), Handler)
             break
         except OSError:
             continue
@@ -757,7 +919,19 @@ def main() -> None:
         sys.exit(f"Nenhuma porta livre entre {args.porta} e {args.porta + 9}.")
 
     server.panel = Panel(os.path.abspath(args.env))
-    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    porta = server.server_address[1]
+    url = f"http://127.0.0.1:{porta}/"
+    if args.celular:
+        server.celular = True
+        server.hosts_ok = frozenset({"127.0.0.1", "localhost", ip})
+        url = f"http://127.0.0.1:{porta}/?c={server.panel.pin}"
+        celular_url = f"http://{ip}:{porta}/?c={server.panel.pin}"
+        print("No celular, aponte a camera para este QR code:\n")
+        mostra_qr(celular_url)
+        print(f"Ou digite no navegador do celular:  {ip}:{porta}")
+        print(f"Codigo: {server.panel.pin}")
+        print("Precisa estar no mesmo wi-fi que este PC.")
+        print("Se o celular nao abrir, libere a porta no firewall do Windows.\n")
     print(f"Painel aberto em {url}")
     print("Deixe esta janela aberta enquanto usa o painel. Ctrl+C fecha.")
     if not os.path.exists(args.env):
