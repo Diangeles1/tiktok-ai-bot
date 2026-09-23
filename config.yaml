@@ -233,6 +233,18 @@ script:
       instruction: >
         Abra citando um detalhe concreto e curioso da historia, algo especifico
         e inesperado que faca a pessoa querer entender de onde aquilo vem.
+    - name: "convite"
+      # Pedido do dono do canal (23/09/2026): abrir direto com o convite e o
+      # versiculo, sem gancho de tensao. A frase de referencia que ja vem
+      # logo depois (regra fixa do prompt) entrega o "Versiculo X" sozinha,
+      # entao aqui so o convite. Girando junto dos outros ganchos para medir
+      # se prende mais ou menos que eles antes de virar o padrao.
+      instruction: >
+        Abra com um convite direto e curto, sempre neste formato ou bem
+        parecido: "Vamos ouvir uma historia de Deus?" (variacoes como "Vamos
+        ouvir uma historia da Biblia?" tambem servem). Sem gancho de tensao,
+        sem detalhe da historia, sem pergunta que entregue o desfecho: e so o
+        convite, puro e curto.
 
   # Fora da rotacao: o codigo so le "hooks". Em 16 geracoes de teste, com tres
   # versoes diferentes da instrucao, este gancho distorceu a passagem com
