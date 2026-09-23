@@ -39,18 +39,38 @@ CAMERA_MOVES = [
 # documentario faz com foto parada, e dobra o numero de cortes sem gerar uma
 # imagem a mais. Sem isso a mesma imagem fica de 6 a 8 segundos na tela, quando
 # o formato curto pede corte a cada 1,5 a 3 segundos.
-# O plano fechado precisa ser BEM mais fechado: cortar de 1.10 para 1.15 no
-# mesmo centro o olho le como falha de video, nao como corte. Por isso o
-# segundo plano pula para perto de 1.4 e sai do centro.
+# O plano fechado precisa ser mais fechado que o aberto para o olho ler corte e
+# nao falha de video, mas sem exagero: a primeira versao ia ate 1.46 e ficou
+# ruim de dois jeitos. Ampliava tanto que borrava (a janela vira 68% da imagem e
+# e esticada de volta para 1080x1920), e principalmente cortava cabeca, porque a
+# altura do enquadramento era escolhida as cegas: um alvo em 0.62 cai na roupa
+# de quem esta em pe, nao no rosto. Ficou um anjo do pescoco para baixo.
+# Agora o maximo e 1.34 e a ALTURA do plano fechado nao e mais fixa: vem de
+# onde o assunto costuma estar naquele tipo de cena (_plano_fechado).
+# Cada item: plano aberto completo, e do fechado so zoom e posicao horizontal.
 SHOT_PAIRS = [
-    ((1.03, 1.12, (0.50, 0.45), (0.50, 0.55)), (1.42, 1.34, (0.34, 0.30), (0.44, 0.38))),
-    ((1.05, 1.14, (0.62, 0.50), (0.44, 0.50)), (1.38, 1.46, (0.64, 0.62), (0.54, 0.56))),
-    ((1.03, 1.13, (0.38, 0.55), (0.56, 0.45)), (1.44, 1.36, (0.60, 0.34), (0.50, 0.44))),
-    ((1.06, 1.15, (0.50, 0.60), (0.50, 0.40)), (1.36, 1.44, (0.38, 0.58), (0.48, 0.50))),
+    ((1.02, 1.09, (0.50, 0.46), (0.52, 0.54)), (1.30, 1.24, 0.44, 0.52)),
+    ((1.02, 1.06, (0.58, 0.50), (0.44, 0.50)), (1.26, 1.32, 0.56, 0.48)),
+    ((1.02, 1.10, (0.42, 0.52), (0.56, 0.46)), (1.32, 1.26, 0.50, 0.44)),
+    ((1.02, 1.08, (0.50, 0.56), (0.50, 0.44)), (1.28, 1.34, 0.46, 0.54)),
 ]
+# Onde o plano fechado procura o assunto, em fracao da altura. Em cena com gente
+# o rosto fica no terco superior do vertical (por isso 0.30, e nao o centro);
+# em paisagem o interesse esta na linha do horizonte, perto do meio.
+ALVO_VERTICAL_PESSOA = 0.30
+ALVO_VERTICAL_PAISAGEM = 0.48
+DERIVA_VERTICAL = 0.04    # quanto o enquadramento passeia em volta do alvo
 # cena mais curta que isso nao se divide: dois planos de 2s cada atropelam a
 # frase em vez de dar ritmo
 SPLIT_MIN_SECONDS = 4.5
+
+
+def _plano_fechado(spec: tuple, tem_pessoa: bool) -> tuple:
+    """Monta o movimento do plano fechado mirando onde o assunto costuma estar."""
+    zoom_de, zoom_para, x_de, x_para = spec
+    alvo = ALVO_VERTICAL_PESSOA if tem_pessoa else ALVO_VERTICAL_PAISAGEM
+    return (zoom_de, zoom_para,
+            (x_de, alvo - DERIVA_VERTICAL), (x_para, alvo + DERIVA_VERTICAL))
 
 # Acabamento de imagem, aplicado no encode final sobre o quadro inteiro (cena,
 # legenda e marca d'agua juntas). Aplicar so na imagem deixaria a legenda com
@@ -374,8 +394,10 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
         # ganha o efeito de profundidade: tem um "primeiro plano" para
         # destacar. A cena aberta (wide shot, aerial view) e paisagem, sem
         # sujeito para separar, e fica no zoom de uma camada so.
-        tem_pessoa = parallax_effect and "medium shot" in scene.get("visual", "").lower()
-        aberto, fechado = SHOT_PAIRS[i % len(SHOT_PAIRS)]
+        cena_com_gente = "medium shot" in scene.get("visual", "").lower()
+        tem_pessoa = parallax_effect and cena_com_gente
+        aberto, spec_fechado = SHOT_PAIRS[i % len(SHOT_PAIRS)]
+        fechado = _plano_fechado(spec_fechado, cena_com_gente)
 
         if visual_duration >= SPLIT_MIN_SECONDS:
             # o plano aberto fica um pouco mais que o fechado: e nele que a
