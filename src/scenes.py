@@ -11,19 +11,21 @@ import subprocess
 import numpy as np
 from moviepy.editor import AudioFileClip
 
-from src import personas as personas_mod, tts
+from src import personas as personas_mod, tts, tts_kokoro
 from src.captions import attach_punctuation
 from src.images import generate_scene_image
 
 
 def render_images(scenes: list[dict], style: str, width: int, height: int,
                    out_dir: str, seed: int | None = None,
-                   personas: list[dict] | None = None) -> None:
+                   personas: list[dict] | None = None, melhor_mao: bool = True) -> None:
     """Gera a imagem de cada cena e guarda o caminho em scene["image"].
 
     O mesmo sufixo de estilo vai em todas as cenas: sem isso cada imagem sai
     com uma pegada visual diferente e o video parece uma colagem. As figuras
-    biblicas citadas ganham a descricao fixa do config (src/personas.py)."""
+    biblicas citadas ganham a descricao fixa do config (src/personas.py).
+    melhor_mao manda a cena com gente para outro modelo, que acerta mao e
+    rosto melhor (ver CLOUDFLARE_MODEL_PESSOA em src/images.py)."""
     os.makedirs(out_dir, exist_ok=True)
     built = personas_mod.build(personas)
     for i, scene in enumerate(scenes):
@@ -33,6 +35,7 @@ def render_images(scenes: list[dict], style: str, width: int, height: int,
             width=width,
             height=height,
             out_path=os.path.join(out_dir, f"scene_{i:02d}.jpg"),
+            melhor_mao=melhor_mao,
             # varia o seed por cena, senao todas as imagens saem parecidas
             seed=None if seed is None else seed + i,
         )
@@ -50,6 +53,13 @@ SILENCE_LEVEL = 0.01      # abaixo disso e silencio
 # passa a adiantar em relacao a fala.
 MAX_PAUSE = 0.34          # pausa interna maior que isso e encurtada
 PAUSE_KEEP = 0.30         # tamanho que a pausa passa a ter
+# A media por janela de 20ms pode classificar um trecho como silencio mesmo com
+# uma respiracao ou consoante fraca escondida dentro dele. Cortar bem em cima
+# disso soa como a voz sendo cortada (visto na pratica com o Kokoro, mais
+# ruidoso que o edge-tts nos trechos quietos): antes de cortar, confere o pico
+# so no pedaco que seria removido, nao a janela inteira.
+PEAK_SAFETY = 1.3         # pico acima disto x SILENCE_LEVEL cancela o corte
+CUT_FADE = 0.008          # fade de 8ms nas duas bordas de cada corte, contra clique
 KEEP_HEAD = 0.05          # sobra no comeco, para a fala nao entrar cortada
 KEEP_TAIL = 0.12          # sobra no fim, para a ultima silaba nao ser cortada
 ANALYSIS_RATE = 16000
@@ -121,7 +131,11 @@ def compress_pauses(path: str, timings: list[dict]) -> tuple[str, list[dict]]:
             continue
         if inicio + duracao >= len(amostras) / ANALYSIS_RATE - 0.05:
             continue
-        cortes.append((inicio + (duracao - sobra) / 2, sobra))
+        corte_inicio = inicio + (duracao - sobra) / 2
+        pedaco = amostras[int(corte_inicio * ANALYSIS_RATE):int((corte_inicio + sobra) * ANALYSIS_RATE)]
+        if len(pedaco) and np.abs(pedaco).max() > SILENCE_LEVEL * PEAK_SAFETY:
+            continue
+        cortes.append((corte_inicio, sobra))
     if not cortes:
         return path, timings
 
@@ -135,7 +149,15 @@ def compress_pauses(path: str, timings: list[dict]) -> tuple[str, list[dict]]:
     destino = os.path.splitext(path)[0] + "_ritmo.wav"
     filtro = ""
     for i, (a, b) in enumerate(pedacos):
-        filtro += f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=N/SR[p{i}];"
+        trecho = f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=N/SR"
+        # fade nas bordas que colam em um corte: sem isso a emenda pode soar
+        # como um clique, mesmo quando os dois lados sao mesmo silencio de verdade
+        fade_d = min(CUT_FADE, (b - a) / 4)
+        if i > 0:
+            trecho += f",afade=t=in:st=0:d={fade_d:.4f}"
+        if i < len(pedacos) - 1:
+            trecho += f",afade=t=out:st={(b - a) - fade_d:.4f}:d={fade_d:.4f}"
+        filtro += trecho + f"[p{i}];"
     filtro += "".join(f"[p{i}]" for i in range(len(pedacos)))
     filtro += f"concat=n={len(pedacos)}:v=0:a=1[out]"
     subprocess.run([_ffmpeg(), "-y", "-v", "error", "-i", path, "-filter_complex", filtro,
@@ -156,16 +178,27 @@ def compress_pauses(path: str, timings: list[dict]) -> tuple[str, list[dict]]:
     return destino, novos
 
 
+# Kokoro so escreve wav; o edge-tts escreve mp3. A extensao certa por
+# provedor evita um arquivo com o container errado dentro do nome.
+_PROVIDERS = {"edge": (tts, "mp3"), "kokoro": (tts_kokoro, "wav")}
+
+
 def render_narration(scenes: list[dict], voice: str, out_dir: str, rate: str | None = None,
-                      gap: float = 0.25) -> float:
+                      gap: float = 0.25, provider: str = "edge") -> float:
     """Sintetiza a narracao de cada cena e preenche scene["audio"], ["start"],
-    ["duration"] e ["timings"] (tempos absolutos). Retorna a duracao total."""
+    ["duration"] e ["timings"] (tempos absolutos). Retorna a duracao total.
+
+    provider="kokoro" usa o modelo local (ver src/tts_kokoro.py) em vez do
+    edge-tts. ATENCAO: o timing de palavra do Kokoro em portugues e estimado,
+    nao medido; confirme a sincronia da legenda olhando o video antes de usar
+    ao vivo."""
     os.makedirs(out_dir, exist_ok=True)
     cursor = 0.0
+    modulo, ext = _PROVIDERS[provider]
 
     for i, scene in enumerate(scenes):
-        audio_path, timings = tts.synthesize_with_timings(
-            scene["narration"], voice, os.path.join(out_dir, f"scene_{i:02d}.mp3"),
+        audio_path, timings = modulo.synthesize_with_timings(
+            scene["narration"], voice, os.path.join(out_dir, f"scene_{i:02d}.{ext}"),
             rate=rate,
         )
         # o edge-tts devolve a palavra sem pontuacao; recuperada aqui, na
