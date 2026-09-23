@@ -62,7 +62,7 @@ total = scenes_mod.render_narration(
 )
 print(f"  narracao total: {total:.1f}s")
 
-music_path = sfx.pick_random_music() if sfx_cfg.get("music_enabled", True) else None
+music_path = sfx.pick_music("calmo") if sfx_cfg.get("music_enabled", True) else None
 print(f"  musica: {music_path or 'nenhuma (assets/music vazia)'}")
 
 print("Montando video final...")

@@ -5,11 +5,18 @@
 content_mode: "cenas"
 
 language: "pt-BR"
-# Voz nativa pt-BR: para narracao biblica o sotaque nativo importa mais que a
-# naturalidade bruta das vozes multilingues, que puxam sotaque americano.
-# Rode `edge-tts --list-voices` para ver as outras opcoes.
-tts_voice: "pt-BR-AntonioNeural"
-# Velocidade da narracao. A leitura padrao do edge-tts fica arrastada para
+# Kokoro roda local (sem custo, sem depender da nuvem da Microsoft) e a voz
+# "santa" (pm_santa) tem o tom grave e cadenciado que a narracao biblica pede.
+# ATENCAO: o timing de palavra do Kokoro em pt-BR e estimado por tamanho do
+# fonema, nao medido (ver src/tts_kokoro.py) — confira a sincronia da legenda
+# no video antes de espalhar. tts_rate nao se aplica ao Kokoro (so ao edge).
+# Para voltar ao edge-tts: tts_provider: "edge" e tts_voice de volta para
+# "pt-BR-AntonioNeural".
+tts_provider: "kokoro"
+tts_voice: "santa"
+# Voz nativa pt-BR do edge-tts, mantida aqui como referencia caso volte:
+# tts_voice: "pt-BR-AntonioNeural"
+# Velocidade da narracao no edge-tts. A leitura padrao fica arrastada para
 # formato curto: uma aceleracao leve melhora a retencao sem atropelar a fala.
 # Acima de +12% a narracao reverente comeca a soar apressada.
 tts_rate: "+8%"
@@ -21,6 +28,10 @@ branding:
   handle: "@candeiabiblica"
   watermark_enabled: true
   watermark_opacity: 0.35
+  # Cartao de texto pedindo inscricao no fim do video, usado so enquanto
+  # assets/voz estiver vazia (ver sfx.assinatura_enabled e main.py). Descomente
+  # para trocar o texto padrao; quando gravar sua voz, o audio toma o lugar dele.
+  # subscribe_text: "Curtiu? Deixa o like e se inscreve para mais historias"
   watermark_repeats: 4     # quantas vezes a marca aparece ao longo do video
 
 # Personagem original fixo do canal. A imagem e gerada UMA vez
@@ -57,6 +68,13 @@ scenes:
     olive-brown skin and dark hair in first-century linen clothing, golden light,
     painterly oil texture, muted ochre and deep blue palette, no text, no logos
   seed: 1234          # base do seed (cada cena usa seed + indice); remova para variar sempre
+  # A cena com gente ("medium shot") passa a usar o Flux Schnell em vez do
+  # SDXL: testado lado a lado, o SDXL erra a mao com frequencia (uma cena
+  # real saiu com 6 dedos) e o Flux acerta melhor mao e rosto. A cena aberta
+  # (wide shot, aerial view) continua no SDXL, que aceita a proporcao
+  # vertical nativa; o Flux so devolve quadrado, e cortar a lateral custaria
+  # a paisagem. false volta tudo para o SDXL.
+  melhor_mao: true
 
   gap_seconds: 0.25   # respiro entre a fala de uma cena e a da proxima
 
@@ -114,7 +132,17 @@ video:
   height: 1920
   fps: 30
   zoom_effect: true         # movimento de camera (zoom + pan com easing), variando a direcao por cena
+  # Na cena com gente (medium shot), separa um "primeiro plano" (recorte central,
+  # onde a pessoa costuma estar) que se move mais rapido que o resto da imagem,
+  # fundido por uma borda suave (ver _parallax_move em src/video.py). Sem
+  # modelo de profundidade nenhum: e so a diferenca de velocidade entre as duas
+  # camadas que da a sensacao de profundidade, em vez de zoom sobre foto parada.
+  parallax_effect: true
   crossfade_seconds: 0.6    # duracao da transicao entre cenas
+  # O video cortava no milissegundo da ultima palavra, o que da sensacao de
+  # video interrompido. A ultima imagem fica esse tempo a mais, com a musica
+  # terminando por cima.
+  tail_seconds: 1.2
   # Leve realce de cor no video inteiro. A imagem do gerador sai um pouco
   # lavada, e a correcao faz diferenca visivel no feed. 1.0 desliga.
   color_boost: 1.12
@@ -133,19 +161,23 @@ fases:
   crescimento:
     # Medido na execucao real com tts_rate +8%: 171 palavras deram 65,4s
     # contando as pausas entre cenas, ou seja 2,6 palavras por segundo.
-    # 90 a 115 palavras dao de 35 a 44 segundos.
-    min_narration_words: 90
-    max_narration_words: 115
-    min_scenes: 5
-    max_scenes: 8
+    # 118 a 145 palavras dao de 45 a 56 segundos, ainda abaixo de 1 minuto.
+    # Subiu de 90-115 porque naquele teto a historia virava sinopse: Jerico
+    # inteira em 112 palavras, com cena de 10 palavras e final sem desfecho.
+    min_narration_words: 118
+    max_narration_words: 145
+    # Mais cenas para o mesmo minuto: a imagem troca a cada 6s em vez de 8s.
+    min_scenes: 6
+    max_scenes: 9
     min_duration_seconds: 0       # nao ha minimo nesta fase
     # Quem pede a inscricao e a voz do dono, gravada, no fim do video (ver
     # sfx.assinatura). Pedir tambem na narracao soaria dobrado, entao aqui a
     # ultima cena so deixa o gancho para a proxima historia.
     cta: >
-      A ULTIMA cena fecha com uma frase que deixa vontade da proxima historia,
-      nascida do assunto de hoje. NAO peca inscricao, curtida nem
-      compartilhamento: isso e dito depois, por outra voz.
+      A ULTIMA cena termina a historia: o que aconteceu com quem viveu aquilo, e
+      uma frase curta do que isso significa. Nada de pergunta no fim, nada de
+      convite vago. NAO peca inscricao, curtida nem compartilhamento: isso e
+      dito depois, por outra voz.
   monetizacao:
     # Calibrado com medicao real: a voz Antonio le 2,42 palavras por segundo no
     # ritmo padrao, o que dava 64s com 155 palavras. Com tts_rate em +8% a
@@ -409,8 +441,17 @@ sfx:
   # YouTube cobra de quem produz com IA. Pasta vazia = sem assinatura.
   assinatura_enabled: true
   assinatura_gap_seconds: 0.45   # pausa entre o fim da narracao e a sua voz
-  music_enabled: true      # trilha de fundo sorteada de assets/music/*.mp3 (pasta vazia = sem musica)
-  music_volume: 0.10       # volume da trilha por baixo da narracao (0 a 1)
+  # Trilha sorteada dentro de assets/music/<clima>/, onde <clima> e o tom geral
+  # que o proprio roteiro classifica (tenso, triunfante ou calmo: ver o campo
+  # "clima" em src/script_gen.py). Pasta do clima vazia cai para assets/music/calmo/.
+  music_enabled: true
+  music_volume: 0.06       # volume da trilha por baixo da narracao (0 a 1); baixado de 0.10 apos feedback de que estava alta
+  # Efeitos de cena (assets/sfx/*.mp3): cada cena pode puxar um ambiente bem
+  # baixo (chuva, agua, multidao, vento...) pela propria descricao visual dela
+  # (ver src/sfx.py _AMBIENCE_KEYWORDS), preso a duracao so daquela cena, e a
+  # ultima ganha um efeito curto de virada (fanfarra ou impacto) batendo com o
+  # clima. Historia "calma" nao ganha efeito de virada: nao ha virada para marcar.
+  sfx_enabled: true
 
 tiktok:
   enabled: true

@@ -6,13 +6,14 @@ inteira, entao os dois formatos usam este mesmo caminho."""
 import os
 
 import numpy as np
-from moviepy.audio.fx.all import audio_fadeout, audio_loop
+from moviepy.audio.fx.all import audio_fadein, audio_fadeout, audio_loop
 from moviepy.editor import (AudioFileClip, CompositeAudioClip, CompositeVideoClip,
                              ImageClip, VideoClip)
 from PIL import Image, ImageDraw, ImageEnhance
 
-from src.captions import build_chunks, render_chunk
+from src.captions import BLACK, HIGHLIGHT, WHITE, build_chunks, render_chunk
 from src.images import load_font
+from src.thumbnail import _fit_text
 
 
 def _ease(progress: float) -> float:
@@ -24,6 +25,8 @@ def _ease(progress: float) -> float:
 # Movimentos de camera alternados por cena, para o video nao ficar repetitivo:
 # (zoom inicial, zoom final, pan inicial, pan final), pan em fracao do excedente
 # da imagem (0 = borda esquerda/topo, 0.5 = centro, 1 = borda direita/base).
+SUBSCRIBE_DURATION = 2.8  # tempo que o cartao de "se inscreva" fica na tela
+
 CAMERA_MOVES = [
     (1.04, 1.16, (0.35, 0.50), (0.65, 0.50)),
     (1.16, 1.04, (0.65, 0.50), (0.35, 0.50)),
@@ -90,6 +93,85 @@ def _camera_move(image_path: str, duration: float, width: int, height: int, move
     return VideoClip(make_frame, duration=duration)
 
 
+_FOREGROUND_MASK_CACHE: dict = {}
+
+
+def _foreground_mask(width: int, height: int) -> Image.Image:
+    """Mascara em L (0 a 255): elipse solida onde o enquadramento 'medium shot'
+    costuma por a pessoa (ver _tem_pessoa em src/images.py), com a borda
+    esmaecendo ate transparente. E o que deixa o recorte do primeiro plano se
+    fundir de volta no fundo sem mostrar uma costura retangular."""
+    key = (width, height)
+    if key not in _FOREGROUND_MASK_CACHE:
+        y, x = np.ogrid[:height, :width]
+        cx, cy = width / 2, height * 0.42
+        rx, ry = width * 0.42, height * 0.32
+        dist = np.sqrt(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2)
+        alpha = np.clip((1.2 - dist) / 0.6, 0.0, 1.0)
+        _FOREGROUND_MASK_CACHE[key] = Image.fromarray((alpha * 255).astype("uint8"), mode="L")
+    return _FOREGROUND_MASK_CACHE[key]
+
+
+def _parallax_move(image_path: str, duration: float, width: int, height: int, move: tuple,
+                    color_boost: float = 1.0):
+    """Como _camera_move, mas com duas camadas na mesma imagem se movendo em
+    velocidades diferentes: o "primeiro plano" (recorte central, onde a pessoa
+    costuma estar) anda mais rapido que o fundo, fundido por uma mascara de
+    borda suave (_foreground_mask). Sem modelo de profundidade nenhum: e a
+    DIFERENCA de velocidade entre as duas que o olho le como profundidade real,
+    nao so zoom sobre uma foto parada."""
+    zoom_from, zoom_to, pan_from, pan_to = move
+    source = _load_boosted(image_path, color_boost)
+    src_w, src_h = source.size
+    mask = _foreground_mask(width, height)
+
+    full_w = min(src_w, src_h * width / height)
+    full_h = full_w * height / width
+    # >1: o primeiro plano percorre mais distancia que o fundo no mesmo tempo
+    FG_FACTOR = 1.6
+
+    def _window(fx, fy, zoom):
+        win_w, win_h = full_w / zoom, full_h / zoom
+        left = (src_w - win_w) * fx
+        top = (src_h - win_h) * fy
+        return left, top, left + win_w, top + win_h
+
+    def make_frame(t):
+        progress = _ease(min(1.0, t / duration))
+        zoom = zoom_from + (zoom_to - zoom_from) * progress
+        fx = pan_from[0] + (pan_to[0] - pan_from[0]) * progress
+        fy = pan_from[1] + (pan_to[1] - pan_from[1]) * progress
+
+        bg = source.resize((width, height), Image.BICUBIC, box=_window(fx, fy, zoom))
+        fg_fx = 0.5 + (fx - 0.5) * FG_FACTOR
+        fg_fy = 0.5 + (fy - 0.5) * FG_FACTOR
+        fg = source.resize((width, height), Image.BICUBIC, box=_window(fg_fx, fg_fy, zoom))
+
+        return np.asarray(Image.composite(fg, bg, mask))
+
+    return VideoClip(make_frame, duration=duration)
+
+
+def _render_subscribe_card(text: str, width: int, height: int, out_path: str) -> tuple[str, int]:
+    """PNG transparente com o pedido de inscricao, mesma fonte/contorno da
+    legenda animada. So entra quando assets/voz esta vazia (ver src/sfx.py
+    pick_random_assinatura): a voz do dono e preferivel, isso e so um substituto
+    ate voce gravar."""
+    font, font_size, lines = _fit_text(text, width, max_lines=3, max_width_ratio=0.8,
+                                        min_font_size=36)
+    stroke = max(3, font_size // 11)
+    line_h = int(font_size * 1.25)
+    img_h = line_h * len(lines) + stroke * 2
+    img = Image.new("RGBA", (width, img_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    for i, line in enumerate(lines):
+        w = draw.textlength(line, font=font)
+        draw.text(((width - w) / 2, i * line_h), line, font=font,
+                   fill=HIGHLIGHT if i == 0 else WHITE, stroke_width=stroke, stroke_fill=BLACK)
+    img.save(out_path)
+    return out_path, img_h
+
+
 def _pop(clip, canvas_w: int, canvas_h: int, center_y: float,
           duration: float = 0.14, start_scale: float = 0.84):
     """Entrada da legenda: cresce rapido ate o tamanho normal. A posicao e
@@ -111,7 +193,8 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
                   laugh_path: str | None, laugh_gap: float,
                   music_path: str | None, music_volume: float,
                   assinatura_path: str | None = None,
-                  assinatura_gap: float = 0.45) -> tuple:
+                  assinatura_gap: float = 0.45,
+                  extra_sfx: list[dict] | None = None) -> tuple:
     tracks = [AudioFileClip(s["audio"]).set_start(s["start"]) for s in scenes]
 
     if laugh_path:
@@ -125,6 +208,20 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
         music = audio_loop(music, duration=total)
         tracks.append(audio_fadeout(music, min(2.0, total / 4)))
 
+    # efeitos de cena (vento, chuva, fanfarra...), bem baixos, para dar corpo
+    # ao momento sem competir com a narracao. Cada item: path, start, volume e,
+    # opcionalmente, duration (sem isso toca ate o fim do video: certo para um
+    # efeito curto de virada, errado para um ambiente que deveria sumir com a
+    # cena que o chamou).
+    for cue in (extra_sfx or []):
+        efeito = AudioFileClip(cue["path"]).volumex(cue.get("volume", 0.2))
+        duracao_max = max(0.5, min(cue.get("duration", total), total - cue["start"]))
+        if efeito.duration > duracao_max:
+            efeito = efeito.subclip(0, duracao_max)
+        efeito = audio_fadein(efeito, min(0.4, efeito.duration / 4))
+        efeito = audio_fadeout(efeito, min(1.5, efeito.duration / 3)).set_start(cue["start"])
+        tracks.append(efeito)
+
     mistura = CompositeAudioClip(tracks)
     # sem fps explicito o MoviePy escolhe pelo primeiro clipe, e um clipe com
     # taxa diferente (a trilha, por exemplo) sai reamostrado errado
@@ -133,13 +230,15 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
 
 
 def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path: str,
-                 words_per_chunk: int = 3, zoom_effect: bool = True,
+                 words_per_chunk: int = 3, zoom_effect: bool = True, parallax_effect: bool = True,
                  tmp_dir: str = "output/_captions",
                  laugh_path: str | None = None, laugh_gap: float = 0.4,
                  assinatura_path: str | None = None, assinatura_gap: float = 0.45,
+                 subscribe_text: str | None = None,
                  caption_bottom_margin: int = 420,
                  music_path: str | None = None, music_volume: float = 0.10,
-                 crossfade: float = 0.6, color_boost: float = 1.0,
+                 extra_sfx: list[dict] | None = None,
+                 crossfade: float = 0.6, tail: float = 1.2, color_boost: float = 1.0,
                  watermark: str | None = None, watermark_opacity: float = 0.35,
                  watermark_repeats: int = 4) -> str:
     """Cada cena precisa de "image", "audio", "start", "duration" e "timings"
@@ -153,6 +252,13 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
         # a voz do dono fecha o video: o tempo do video cresce para caber ela
         with AudioFileClip(assinatura_path) as assinatura:
             total = max(total, narration_end + assinatura_gap + assinatura.duration)
+    elif subscribe_text:
+        # sem gravacao de voz ainda, o pedido de inscricao vira um cartao de
+        # texto no fim, no lugar da assinatura falada
+        total = max(total, narration_end + assinatura_gap + SUBSCRIBE_DURATION)
+    # respiro no fim: sem ele o corte cai junto com a ultima silaba e o video
+    # parece interrompido
+    total += tail
 
     scene_clips = []
     for i, scene in enumerate(scenes):
@@ -163,8 +269,17 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
         visual_duration = (total - scene["start"]) if is_last else (scene["duration"] + crossfade)
 
         if zoom_effect:
-            clip = _camera_move(scene["image"], visual_duration, width, height,
-                                 CAMERA_MOVES[i % len(CAMERA_MOVES)], color_boost)
+            # so a cena com gente (medium shot, ver _tem_pessoa em src/images.py)
+            # ganha o efeito de profundidade: tem um "primeiro plano" para
+            # destacar. A cena aberta (wide shot, aerial view) e paisagem, sem
+            # sujeito para separar, e fica no zoom de uma camada so.
+            move = CAMERA_MOVES[i % len(CAMERA_MOVES)]
+            if parallax_effect and "medium shot" in scene.get("visual", "").lower():
+                clip = _parallax_move(scene["image"], visual_duration, width, height,
+                                       move, color_boost)
+            else:
+                clip = _camera_move(scene["image"], visual_duration, width, height,
+                                     move, color_boost)
         else:
             frame = np.asarray(_load_boosted(scene["image"], color_boost))
             clip = (ImageClip(frame).set_duration(visual_duration)
@@ -224,11 +339,22 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
                 .crossfadein(0.4).crossfadeout(0.4)
             )
 
+    subscribe_clips = []
+    if subscribe_text and not assinatura_path:
+        card_path, card_h = _render_subscribe_card(subscribe_text, width, height,
+                                                     f"{tmp_dir}/subscribe.png")
+        start = narration_end + assinatura_gap
+        subscribe_clips.append(
+            ImageClip(card_path).set_start(start).set_duration(total - start)
+            .set_position(("center", (height - card_h) / 2))
+            .crossfadein(0.4)
+        )
+
     audio, audio_tracks = _build_audio(scenes, narration_end, total,
                                         laugh_path, laugh_gap, music_path, music_volume,
-                                        assinatura_path, assinatura_gap)
+                                        assinatura_path, assinatura_gap, extra_sfx)
 
-    final = CompositeVideoClip(scene_clips + caption_clips + watermark_clips,
+    final = CompositeVideoClip(scene_clips + caption_clips + watermark_clips + subscribe_clips,
                                 size=(width, height))
     final = final.set_audio(audio).set_duration(total)
 
@@ -244,7 +370,7 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
     )
 
     final.close()
-    for clip in scene_clips + caption_clips + watermark_clips + audio_tracks:
+    for clip in scene_clips + caption_clips + watermark_clips + subscribe_clips + audio_tracks:
         clip.close()
 
     return out_path
