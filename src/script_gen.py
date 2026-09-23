@@ -189,11 +189,14 @@ Regras da capa (campo "thumbnail", o ultimo do JSON):
 - Uma frase curta que se le de uma vez, de 3 a 6 palavras, com gramatica e
   ortografia corretas. Nunca lista de palavras separadas por virgula.
 - Escreva em letra normal, NAO em caixa alta: o programa converte depois.
-- NAO resuma o desfecho na capa. Prefira um fato concreto do MEIO da historia
-  que gere duvida sozinho (ex.: "morto ha quatro dias", "tres vezes antes do
-  galo cantar") ou uma pergunta cuja resposta so aparece assistindo. "MESTRE
-  LHE DEU" ja conta o fim e nao serve; "MORTO HA QUATRO DIAS" prende sem
-  contar como termina.
+- A capa descreve o PROBLEMA, nunca a solucao. Use um fato concreto de ANTES da
+  virada, quando ainda nao se sabe como termina. E PROIBIDO nomear o resultado
+  na capa: cura, ressurreicao, vitoria, queda da muralha, perdao, salvamento.
+  Se a frase permite adivinhar o fim sem assistir, ela esta errada.
+  Certo: "morto ha quatro dias", "tres vezes antes do galo cantar", "sete
+  voltas ao redor da muralha", "nao restava mais azeite".
+  Errado: "pedra removida, vida retornada" (conta que ele voltou a viver),
+  "mestre lhe deu" (conta o desfecho), "a muralha caiu" (conta o fim).
 - A capa e sobre a historia DESTE video, e nao outro episodio do mesmo
   personagem. Prefira palavras que aparecem na sua propria narracao.
 - A capa tem que ser verdadeira para a passagem. Cada verbo diz o que a pessoa
