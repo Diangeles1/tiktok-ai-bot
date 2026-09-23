@@ -382,7 +382,8 @@ navegador e mostra:
   o horário automático gerou no GitHub (e o registro do que já saiu no YouTube), para
   você postar no TikTok a partir dele
 
-O painel roda só na sua máquina (endereço `127.0.0.1`, inacessível de fora) e usa as
+O painel roda só na sua máquina (endereço `127.0.0.1`, inacessível de fora, veja
+[Abrindo no celular](#abrindo-no-celular) para usá-lo do telefone) e usa as
 chaves do `.env`, que nunca aparecem na página. A geração é o mesmo `main.py` do GitHub
 Actions, então o vídeo sai igual ao da publicação automática. Se o TikTok renovar o
 token durante uma publicação, o valor novo é gravado no `.env` e, com `GH_PAT`
@@ -390,6 +391,36 @@ configurado, também nos Secrets do repositório.
 
 O tema da vez é o mesmo que a publicação automática daquele horário vai usar. Se for
 publicar pelo painel e pelo agendamento no mesmo dia, escolha outro tema na lista.
+
+### Abrindo no celular
+
+Útil para conferir o vídeo e mandar para o app do TikTok sem sair do telefone. O PC
+precisa estar ligado, com o painel aberto, e os dois aparelhos no mesmo wi-fi:
+
+```bash
+python painel.py --celular
+```
+
+No Windows, dois cliques em `painel_celular.bat`. A janela mostra um QR code: aponte a
+câmera do celular e o painel abre no navegador dele. Para digitar, o endereço e o código
+de seis dígitos aparecem logo abaixo do QR.
+
+O que protege o painel nesse modo:
+
++ O código muda toda vez que o painel abre e vale só para quem digitou, por doze horas
++ Oito códigos errados travam a entrada por dois minutos
++ O endereço existe apenas dentro do seu wi-fi, nunca na internet
++ Sem o `--celular`, nada muda: o painel volta a aceitar só a própria máquina
+
+Na primeira vez o Windows bloqueia a conexão de fora. Abra o PowerShell como
+administrador e libere as portas do painel apenas para a rede local:
+
+```powershell
+New-NetFirewallRule -DisplayName "Painel do canal" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8765-8774 -Profile Any -RemoteAddress LocalSubnet
+```
+
+O QR code vem do pacote `qrcode` (`pip install qrcode`). Sem ele o painel continua
+funcionando e mostra o endereço para digitar.
 
 ## Rodando localmente
 
@@ -429,7 +460,7 @@ python test_pipeline.py
 | Arquivo | Papel |
 |---|---|
 | `main.py` | Orquestra o pipeline e a publicação |
-| `painel.py` / `web/painel.html` | Painel local: geração ao vivo, conferência e publicação |
+| `painel.py` / `web/painel.html` | Painel local: geração ao vivo, conferência e publicação, no PC ou no celular (`--celular`) |
 | `src/script_gen.py` | Prompt, rotações e validação do roteiro |
 | `src/images.py` / `src/scenes.py` | Imagem de cada cena e linha do tempo da narração |
 | `src/tts.py` / `src/captions.py` | Narração com timing por palavra e legendas |
