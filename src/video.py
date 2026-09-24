@@ -34,6 +34,62 @@ CAMERA_MOVES = [
     (1.16, 1.04, (0.50, 0.38), (0.50, 0.62)),
 ]
 
+# Cada cena vira DOIS planos da mesma imagem, com um corte seco no meio: um
+# aberto e depois um fechado em outro ponto do quadro. E o que editor de
+# documentario faz com foto parada, e dobra o numero de cortes sem gerar uma
+# imagem a mais. Sem isso a mesma imagem fica de 6 a 8 segundos na tela, quando
+# o formato curto pede corte a cada 1,5 a 3 segundos.
+# O plano fechado precisa ser mais fechado que o aberto para o olho ler corte e
+# nao falha de video, mas sem exagero: a primeira versao ia ate 1.46 e ficou
+# ruim de dois jeitos. Ampliava tanto que borrava (a janela vira 68% da imagem e
+# e esticada de volta para 1080x1920), e principalmente cortava cabeca, porque a
+# altura do enquadramento era escolhida as cegas: um alvo em 0.62 cai na roupa
+# de quem esta em pe, nao no rosto. Ficou um anjo do pescoco para baixo.
+# Agora o maximo e 1.34 e a ALTURA do plano fechado nao e mais fixa: vem de
+# onde o assunto costuma estar naquele tipo de cena (_plano_fechado).
+# Cada item: plano aberto completo, e do fechado so zoom e posicao horizontal.
+SHOT_PAIRS = [
+    ((1.02, 1.09, (0.50, 0.46), (0.52, 0.54)), (1.30, 1.24, 0.44, 0.52)),
+    ((1.02, 1.06, (0.58, 0.50), (0.44, 0.50)), (1.26, 1.32, 0.56, 0.48)),
+    ((1.02, 1.10, (0.42, 0.52), (0.56, 0.46)), (1.32, 1.26, 0.50, 0.44)),
+    ((1.02, 1.08, (0.50, 0.56), (0.50, 0.44)), (1.28, 1.34, 0.46, 0.54)),
+]
+# Onde o plano fechado procura o assunto, em fracao da altura. Em cena com gente
+# o rosto fica no terco superior do vertical (por isso 0.30, e nao o centro);
+# em paisagem o interesse esta na linha do horizonte, perto do meio.
+ALVO_VERTICAL_PESSOA = 0.30
+ALVO_VERTICAL_PAISAGEM = 0.48
+DERIVA_VERTICAL = 0.04    # quanto o enquadramento passeia em volta do alvo
+# cena mais curta que isso nao se divide: dois planos de 2s cada atropelam a
+# frase em vez de dar ritmo
+SPLIT_MIN_SECONDS = 4.5
+
+
+def _plano_fechado(spec: tuple, tem_pessoa: bool) -> tuple:
+    """Monta o movimento do plano fechado mirando onde o assunto costuma estar."""
+    zoom_de, zoom_para, x_de, x_para = spec
+    alvo = ALVO_VERTICAL_PESSOA if tem_pessoa else ALVO_VERTICAL_PAISAGEM
+    return (zoom_de, zoom_para,
+            (x_de, alvo - DERIVA_VERTICAL), (x_para, alvo + DERIVA_VERTICAL))
+
+# Acabamento de imagem, aplicado no encode final sobre o quadro inteiro (cena,
+# legenda e marca d'agua juntas). Aplicar so na imagem deixaria a legenda com
+# aparencia de adesivo colado por cima, em vez de parte da mesma cena.
+#  - eq: contraste leve, que a imagem do gerador sai um pouco chapada
+#  - colorbalance: luz quente no claro e sombra puxada para o azul, que e o
+#    contraste de cor do "golden hour" que o cinema usa (a paleta do canal ja
+#    pede ocre e azul, isso reforca)
+#  - vignette: escurece o canto e puxa o olho para o centro, onde esta a acao.
+#    PI/5 e mais suave que o PI/4.5 comum em video de terror
+#  - noise: grao de filme. Alem do visual, ele quebra a "lisura" de imagem
+#    gerada por IA, que e o que mais denuncia video automatico
+ACABAMENTO = (
+    "eq=contrast=1.06:saturation=1.03,"
+    "colorbalance=rh=0.04:bh=-0.03:rs=-0.02:bs=0.05,"
+    "vignette=PI/5,"
+    "noise=alls=5:allf=t"
+)
+
 
 def _load_boosted(image_path: str, color_boost: float = 1.0) -> Image.Image:
     """Abre a imagem ja com o realce de cor aplicado.
@@ -189,6 +245,48 @@ def _pop(clip, canvas_w: int, canvas_h: int, center_y: float,
     return clip.resize(scale).set_position(position)
 
 
+# Dinamica da trilha. O volume de base (sfx.music_volume, 0.06) ja e baixo o
+# bastante para nao disputar com a narracao: o que faltava era o outro lado, a
+# trilha CRESCER. Ela sobe pouco antes da ultima cena, que e onde a historia
+# vira, e volta ao normal enquanto a ultima fala acontece, para o crescimento
+# nao atropelar justamente a frase mais importante.
+SWELL_PEAK = 2.2      # multiplicador do volume de base no topo
+SWELL_IN = 1.2        # tempo subindo, terminando no comeco da ultima cena
+SWELL_HOLD = 0.4      # tempo no topo
+SWELL_OUT = 2.5       # tempo voltando ao volume de base
+
+
+def _ganho_trilha(t, virada: float | None, narration_end: float, total: float):
+    """Multiplicador do volume da trilha em cada instante.
+
+    Aceita t escalar ou vetor de amostras, que e como o MoviePy chama."""
+    tempo = np.asarray(t, dtype=float)
+    ganho = np.ones_like(tempo)
+
+    if virada is not None:
+        subida = np.clip((tempo - (virada - SWELL_IN)) / SWELL_IN, 0.0, 1.0)
+        descida = 1.0 - np.clip((tempo - (virada + SWELL_HOLD)) / SWELL_OUT, 0.0, 1.0)
+        ganho = ganho + (SWELL_PEAK - 1.0) * np.minimum(subida, descida)
+
+    # sem a narracao por cima, o mesmo volume que era "de fundo" passa a soar
+    # alto sozinho (feedback real: "a musica no final ficou muito alta"), entao
+    # a partir do fim da narracao ela vai sumindo ate o corte
+    if total > narration_end:
+        saida = np.clip((tempo - narration_end) / (total - narration_end), 0.0, 1.0)
+        ganho = ganho * (1.0 - saida)
+    return ganho
+
+
+def _com_dinamica(music, virada: float | None, narration_end: float, total: float):
+    def aplica(get_frame, t):
+        quadro = get_frame(t)
+        ganho = _ganho_trilha(t, virada, narration_end, total)
+        if np.ndim(quadro) == 2:          # bloco de amostras: (n, canais)
+            return quadro * np.asarray(ganho).reshape(-1, 1)
+        return quadro * ganho             # amostra unica
+    return music.fl(aplica, keep_duration=True)
+
+
 def _build_audio(scenes: list[dict], narration_end: float, total: float,
                   laugh_path: str | None, laugh_gap: float,
                   music_path: str | None, music_volume: float,
@@ -206,12 +304,11 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
     if music_path:
         music = AudioFileClip(music_path).volumex(music_volume)
         music = audio_loop(music, duration=total)
-        # sem a narracao por cima, o mesmo volume que era "de fundo" passa a
-        # soar alto sozinho (feedback: "a musica no final ficou muito alta").
-        # A partir do fim da narracao a musica vai sumindo aos poucos, em vez
-        # de segurar o volume ate faltar so 2s pro corte.
-        fade = max(1.0, total - narration_end)
-        tracks.append(audio_fadeout(music, min(fade, total)))
+        # a trilha deixa de ser um tapete de volume fixo e passa a ter dinamica:
+        # cresce na virada da historia e some depois da narracao (ver _ganho_trilha)
+        virada = scenes[-1]["start"] if len(scenes) > 2 else None
+        music = _com_dinamica(music, virada, narration_end, total)
+        tracks.append(music)
 
     # efeitos de cena (vento, chuva, fanfarra...), bem baixos, para dar corpo
     # ao momento sem competir com a narracao. Cada item: path, start, volume e,
@@ -245,7 +342,7 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
                  extra_sfx: list[dict] | None = None,
                  crossfade: float = 0.6, tail: float = 1.2, color_boost: float = 1.0,
                  watermark: str | None = None, watermark_opacity: float = 0.35,
-                 watermark_repeats: int = 4) -> str:
+                 watermark_repeats: int = 4, acabamento: bool = True) -> str:
     """Cada cena precisa de "image", "audio", "start", "duration" e "timings"
     (tempos absolutos), como monta src.scenes."""
     narration_end = scenes[-1]["start"] + scenes[-1]["duration"]
@@ -265,35 +362,63 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
     # parece interrompido
     total += tail
 
+    # Dissolucao so na entrada da ULTIMA cena, que e onde a historia vira. Entre
+    # as outras o corte e seco: em gramatica de cinema a dissolucao significa
+    # "passou tempo", entao usar em toda emenda nao comunica nada e ainda
+    # amolece cada corte, que e o que faz o video parecer apresentacao de
+    # slides. Com menos de tres cenas nao ha virada para marcar.
+    def _dissolucao_na_entrada(indice: int) -> float:
+        return crossfade if (indice == len(scenes) - 1 and len(scenes) > 2) else 0.0
+
     scene_clips = []
     for i, scene in enumerate(scenes):
         is_last = i == len(scenes) - 1
-        # a imagem passa do fim da propria cena para a proxima ter algo por baixo
-        # durante o crossfade; a ultima estica ate o fim para a risada nao cair
-        # sobre tela preta
-        visual_duration = (total - scene["start"]) if is_last else (scene["duration"] + crossfade)
+        # a imagem passa do fim da propria cena so quando a proxima entra
+        # dissolvendo, para ter algo por baixo; a ultima estica ate o fim para a
+        # assinatura nao cair sobre tela preta
+        sobra = 0.0 if is_last else _dissolucao_na_entrada(i + 1)
+        visual_duration = (total - scene["start"]) if is_last else (scene["duration"] + sobra)
+        entrada = _dissolucao_na_entrada(i)
 
-        if zoom_effect:
-            # so a cena com gente (medium shot, ver _tem_pessoa em src/images.py)
-            # ganha o efeito de profundidade: tem um "primeiro plano" para
-            # destacar. A cena aberta (wide shot, aerial view) e paisagem, sem
-            # sujeito para separar, e fica no zoom de uma camada so.
-            move = CAMERA_MOVES[i % len(CAMERA_MOVES)]
-            if parallax_effect and "medium shot" in scene.get("visual", "").lower():
-                clip = _parallax_move(scene["image"], visual_duration, width, height,
-                                       move, color_boost)
-            else:
-                clip = _camera_move(scene["image"], visual_duration, width, height,
-                                     move, color_boost)
-        else:
+        if not zoom_effect:
             frame = np.asarray(_load_boosted(scene["image"], color_boost))
             clip = (ImageClip(frame).set_duration(visual_duration)
                     .resize(height=height).set_position("center"))
+            clip = clip.set_start(scene["start"])
+            if entrada:
+                clip = clip.crossfadein(entrada)
+            scene_clips.append(clip)
+            continue
 
-        clip = clip.set_start(scene["start"])
-        if i > 0:
-            clip = clip.crossfadein(crossfade)
-        scene_clips.append(clip)
+        # so a cena com gente (medium shot, ver _tem_pessoa em src/images.py)
+        # ganha o efeito de profundidade: tem um "primeiro plano" para
+        # destacar. A cena aberta (wide shot, aerial view) e paisagem, sem
+        # sujeito para separar, e fica no zoom de uma camada so.
+        cena_com_gente = "medium shot" in scene.get("visual", "").lower()
+        tem_pessoa = parallax_effect and cena_com_gente
+        aberto, spec_fechado = SHOT_PAIRS[i % len(SHOT_PAIRS)]
+        fechado = _plano_fechado(spec_fechado, cena_com_gente)
+
+        if visual_duration >= SPLIT_MIN_SECONDS:
+            # o plano aberto fica um pouco mais que o fechado: e nele que a
+            # frase se estabelece, o fechado entra para acentuar
+            dur_aberto = visual_duration * 0.55
+            planos = [(aberto, 0.0, dur_aberto, tem_pessoa),
+                      (fechado, dur_aberto, visual_duration - dur_aberto, False)]
+        else:
+            planos = [(aberto, 0.0, visual_duration, tem_pessoa)]
+
+        for ordem, (move, offset, dur, usar_parallax) in enumerate(planos):
+            if usar_parallax:
+                clip = _parallax_move(scene["image"], dur, width, height, move, color_boost)
+            else:
+                clip = _camera_move(scene["image"], dur, width, height, move, color_boost)
+            clip = clip.set_start(scene["start"] + offset)
+            # so o primeiro plano da cena herda a dissolucao de entrada; o corte
+            # entre os dois planos da MESMA cena e sempre seco
+            if ordem == 0 and entrada:
+                clip = clip.crossfadein(entrada)
+            scene_clips.append(clip)
 
     caption_clips = []
     os.makedirs(tmp_dir, exist_ok=True)
@@ -372,6 +497,9 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
         preset="medium",
         threads=4,
         logger=None,
+        # o acabamento entra NO MESMO encode: aplicar depois exigiria
+        # recomprimir o video inteiro de novo e perder qualidade
+        ffmpeg_params=["-vf", ACABAMENTO] if acabamento else None,
     )
 
     final.close()

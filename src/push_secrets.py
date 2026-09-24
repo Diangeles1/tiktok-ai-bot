@@ -37,9 +37,19 @@ NEW_KEYS = {
     # Cloudflare.
     "--gemini": ("GEMINI_API_KEY", "chave da API do Gemini",
                  lambda v: 20 <= len(v) <= 80),
+    # Banco de video gratuito do formato "versiculo". Escolhido o Pixabay e nao
+    # o Pexels porque a licenca dele NAO exige credito ao autor (a do Pexels
+    # exige quando se usa a API), e permite uso comercial. A unica proibicao que
+    # nos tocaria e redistribuir o clipe "standalone, sem esforco criativo
+    # aplicado", que nao e o caso: entra narracao, legenda, cartao e correcao
+    # de cor por cima.
+    # A chave vem no formato "12345678-abc123...", com digitos e um hifen.
+    "--pixabay": ("PIXABAY_API_KEY", "chave da API do Pixabay",
+                  lambda v: 25 <= len(v) <= 60 and "-" in v),
 }
 
 GEMINI_KEY_URL = "https://aistudio.google.com/apikey"
+PIXABAY_KEY_URL = "https://pixabay.com/api/docs/"
 
 
 def _replace_key(env_key: str, label: str, looks_right) -> None:
@@ -58,6 +68,12 @@ def main() -> None:
                 print("Abrindo o Google AI Studio para criar a chave gratuita da Gemini.")
                 print(f"Se nao abrir: {GEMINI_KEY_URL}\n")
                 webbrowser.open(GEMINI_KEY_URL)
+            if flag == "--pixabay":
+                print("Abrindo a pagina da API do Pixabay.")
+                print("Faca login (ou crie conta gratis). A chave aparece na propria")
+                print("pagina de documentacao, ja preenchida, quando voce esta logado.")
+                print(f"Se nao abrir: {PIXABAY_KEY_URL}\n")
+                webbrowser.open(PIXABAY_KEY_URL)
             _replace_key(env_key, label, looks_right)
     if not credentials.current("GH_PAT"):
         print("Falta o GH_PAT, o token que deixa gravar nos Secrets do GitHub.")

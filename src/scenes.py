@@ -18,27 +18,42 @@ from src.images import generate_scene_image
 
 def render_images(scenes: list[dict], style: str, width: int, height: int,
                    out_dir: str, seed: int | None = None,
-                   personas: list[dict] | None = None, melhor_mao: bool = True) -> None:
+                   personas: list[dict] | None = None, melhor_mao: bool = True,
+                   flux2: bool = True, continuidade: bool = True,
+                   reserva_pollinations: bool = True) -> None:
     """Gera a imagem de cada cena e guarda o caminho em scene["image"].
 
     O mesmo sufixo de estilo vai em todas as cenas: sem isso cada imagem sai
     com uma pegada visual diferente e o video parece uma colagem. As figuras
     biblicas citadas ganham a descricao fixa do config (src/personas.py).
-    melhor_mao manda a cena com gente para outro modelo, que acerta mao e
-    rosto melhor (ver CLOUDFLARE_MODEL_PESSOA em src/images.py)."""
+    flux2 usa o modelo que devolve o vertical inteiro em pintura; melhor_mao
+    vale so no fallback, mandando a cena com gente para outro modelo (ver
+    CLOUDFLARE_MODEL_FLUX2 e CLOUDFLARE_MODEL_PESSOA em src/images.py).
+
+    continuidade manda a imagem da cena anterior como referencia da seguinte,
+    para o video parecer o mesmo lugar filmado de outro angulo em vez de uma
+    sequencia de quadros sem relacao (ver REF_MAX_SIDE em src/images.py). A
+    descricao da cena continua mandando: quando a historia muda de lugar de
+    verdade, o prompt vence a referencia, que ai carrega so luz e paleta."""
     os.makedirs(out_dir, exist_ok=True)
     built = personas_mod.build(personas)
+    anterior = None
     for i, scene in enumerate(scenes):
-        print(f"  [cena {i + 1}/{len(scenes)}] imagem: {scene['visual'][:60]}...")
+        marca = "" if anterior is None else " (seguindo a cena anterior)"
+        print(f"  [cena {i + 1}/{len(scenes)}]{marca} imagem: {scene['visual'][:60]}...")
         scene["image"] = generate_scene_image(
             prompt=f"{personas_mod.apply(scene['visual'], built)}, {style}",
             width=width,
             height=height,
             out_path=os.path.join(out_dir, f"scene_{i:02d}.jpg"),
             melhor_mao=melhor_mao,
+            flux2=flux2,
+            referencia=anterior if continuidade else None,
+            reserva_pollinations=reserva_pollinations,
             # varia o seed por cena, senao todas as imagens saem parecidas
             seed=None if seed is None else seed + i,
         )
+        anterior = scene["image"]
 
 
 # o edge-tts entrega cada fala com silencio nas pontas (medido: ~0,16s no
@@ -62,6 +77,9 @@ PEAK_SAFETY = 1.3         # pico acima disto x SILENCE_LEVEL cancela o corte
 CUT_FADE = 0.008          # fade de 8ms nas duas bordas de cada corte, contra clique
 KEEP_HEAD = 0.05          # sobra no comeco, para a fala nao entrar cortada
 KEEP_TAIL = 0.12          # sobra no fim, para a ultima silaba nao ser cortada
+# fracao da energia da fala abaixo da qual o som no fim e cauda do modelo, e nao
+# voz (ver _fim_da_fala). Medido: cauda ate 24%, silaba final fraca 57%.
+TAIL_LEVEL_RATIO = 0.40
 ANALYSIS_RATE = 16000
 
 
@@ -80,6 +98,38 @@ def _pcm(path: str) -> np.ndarray:
     return np.frombuffer(saida, dtype=np.int16).astype(np.float32) / 32768
 
 
+def _fim_da_fala(amostras: np.ndarray) -> float:
+    """Instante em que a fala de verdade acaba, ignorando a cauda do modelo.
+
+    O Kokoro deixa depois da ultima silaba um rastro baixinho de 0,2 a 0,4s. Ele
+    fica acima de SILENCE_LEVEL, entao a aparagem por silencio o preservava, e
+    ele caia bem na pausa entre uma frase e a seguinte: e o "resquicio de voz"
+    que aparecia no video.
+
+    O limiar e relativo a energia da propria fala, e nao um valor fixo, porque
+    cada voz e cada frase tem volume diferente. Medido nas 7 cenas de um video
+    real: a cauda chega no maximo a 24% da energia da fala e a silaba final mais
+    fraca vale 57%, entao 40% separa os dois com folga de 1,6x para cada lado.
+    Essa folga e o que evita repetir o bug antigo de cortar a voz."""
+    passo = max(1, int(0.02 * ANALYSIS_RATE))
+    n = len(amostras) // passo
+    if n == 0:
+        return len(amostras) / ANALYSIS_RATE
+    energia = np.sqrt((amostras[:n * passo].reshape(n, passo) ** 2).mean(axis=1))
+    if energia.max() <= 0:
+        return len(amostras) / ANALYSIS_RATE
+
+    forte = energia[energia > energia.max() * 0.25]
+    if not len(forte):
+        return len(amostras) / ANALYSIS_RATE
+    limiar = float(np.median(forte)) * TAIL_LEVEL_RATIO
+
+    acima = np.where(energia >= limiar)[0]
+    if not len(acima):
+        return len(amostras) / ANALYSIS_RATE
+    return (acima[-1] + 1) * 0.02
+
+
 def trim_silence(path: str) -> tuple[str, float]:
     """Corta o silencio das pontas. Devolve o arquivo novo e quanto saiu do
     comeco, que e o quanto os tempos das palavras precisam andar para tras."""
@@ -88,7 +138,7 @@ def trim_silence(path: str) -> tuple[str, float]:
     if len(acima) == 0:
         return path, 0.0
     inicio = max(0.0, acima[0] / ANALYSIS_RATE - KEEP_HEAD)
-    fim = min(len(amostras) / ANALYSIS_RATE, acima[-1] / ANALYSIS_RATE + KEEP_TAIL)
+    fim = min(len(amostras) / ANALYSIS_RATE, _fim_da_fala(amostras) + KEEP_TAIL)
     if fim - inicio < 0.2:
         return path, 0.0
     destino = os.path.splitext(path)[0] + "_apara.wav"

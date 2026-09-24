@@ -457,6 +457,7 @@ function renderEstado(e) {
   renderLote(e.lote);
 
   const partes = [];
+  if (e.proximo.tipo) partes.push(`Tipo: ${e.proximo.tipo}`);
   if (e.proximo.gancho) partes.push(`Gancho: ${e.proximo.gancho}`);
   if (e.proximo.arco) partes.push(`Arco: ${e.proximo.arco}`);
   let texto = partes.join(' · ');
@@ -581,6 +582,7 @@ function abrirExecucao(nome) {
     ['Agendar para', m.agendar_para ? `${m.agendar_para} (horário de Brasília)` : null],
     ['Tema', m.tema],
     ['Passagem', m.passagem || 'não informada'],
+    ['Tipo', m.tipo],
     ['Gancho', m.gancho],
     ['Arco', m.arco],
     ['Fase', m.fase],
