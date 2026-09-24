@@ -89,7 +89,12 @@ scenes:
   # mesmo lugar filmado de outro angulo em vez de quadros soltos. Quando a
   # historia troca de lugar de verdade, a descricao da cena vence a referencia.
   # Exige flux2: os modelos antigos nao aceitam imagem de referencia.
-  continuidade: true
+  # DESLIGADO por enquanto: o efeito foi validado em 3 imagens soltas (a cena 3
+  # manteve o tumulo, o vale e a montanha da cena 1), mas nunca num video
+  # inteiro de 6 a 9 cenas encadeadas. O risco aberto e DERIVA: as cenas podem
+  # ir ficando parecidas demais, ou uma cena ignorar a propria descricao porque
+  # a referencia dominou. Ligar depois de rodar um video completo e conferir.
+  continuidade: false
   # Reserva para quando a cota diaria gratuita da Cloudflare acabar (10.000
   # neuronios; no uso normal o canal gasta 28% a 42%, entao isso e raro).
   # true: o video termina na Pollinations, que e aberta e nao usa essa cota. A
