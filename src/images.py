@@ -53,6 +53,12 @@ CLOUDFLARE_MODEL_PESSOA = "@cf/black-forest-labs/flux-1-schnell"
 # Estourar o limite no plano gratuito da ERRO, nao cobranca. Nesse caso nao
 # adianta cair para os modelos antigos, porque a cota e da CONTA e nao do
 # modelo: o dia inteiro fica sem imagem ate a virada.
+# ATENCAO sobre a virada: a Cloudflare documenta reset diario a 00:00 UTC, mas
+# nao e confiavel. Em 24/09/2026 a cota continuava recusando (429) a 01:15 UTC,
+# ja no dia seguinte, e o forum da Cloudflare tem varios relatos do mesmo
+# sintoma ("quota stuck after UTC reset", "dashboard shows 0/10k but API returns
+# 429"). Por isso a reserva da Pollinations nao e luxo: sem ela, um dia preso
+# assim tira o canal do ar inteiro.
 CLOUDFLARE_MODEL_FLUX2 = "@cf/black-forest-labs/flux-2-klein-4b"
 FLUX2_MAX_SIDE = 1600
 # este modelo so responde a multipart/form-data: em JSON devolve 400 pedindo
@@ -297,14 +303,16 @@ def generate_scene_image(prompt: str, width: int, height: int, out_path: str,
             if not reserva_pollinations:
                 raise RuntimeError(
                     "A cota diaria gratuita da Cloudflare acabou, e a reserva "
-                    "esta desligada (scenes.reserva_pollinations). A cota volta "
-                    f"a meia-noite UTC, 21h em Brasilia. Cloudflare: {exc}"
+                    "esta desligada (scenes.reserva_pollinations). O reset e a "
+                    "00:00 UTC (21h em Brasilia), mas pode demorar mais. "
+                    f"Cloudflare: {exc}"
                 ) from exc
             last_exc = exc
             sem_cota = True
-            print("  [images] a cota diaria gratuita da Cloudflare acabou "
-                  "(volta a meia-noite UTC, 21h em Brasilia). "
-                  "Seguindo na Pollinations, com imagem bem mais simples.")
+            print("  [images] a cota diaria gratuita da Cloudflare acabou. "
+                  "O reset e a 00:00 UTC (21h em Brasilia), mas as vezes "
+                  "demora mais que isso. Seguindo na Pollinations, com "
+                  "imagem bem mais simples.")
         except (requests.RequestException, RuntimeError, OSError) as exc:
             last_exc = exc
             wait = 5 * (attempt + 1)
