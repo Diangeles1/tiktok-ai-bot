@@ -250,13 +250,24 @@ def _pop(clip, canvas_w: int, canvas_h: int, center_y: float,
 # trilha CRESCER. Ela sobe pouco antes da ultima cena, que e onde a historia
 # vira, e volta ao normal enquanto a ultima fala acontece, para o crescimento
 # nao atropelar justamente a frase mais importante.
-SWELL_PEAK = 2.2      # multiplicador do volume de base no topo
+# TETO ABSOLUTO da trilha. Existe porque o multiplicador abaixo ja desfez uma
+# correcao uma vez: o volume de base foi baixado de 0.10 para 0.06 depois do
+# feedback de que a musica estava alta, mas o SWELL_PEAK de 2.2 levava o pico
+# para 0.06 x 2.2 = 0.132, ou seja MAIS ALTO que os 0.10 reclamados. Duas
+# constantes em arquivos diferentes, e o produto delas nunca foi conferido.
+#
+# Com o teto, mexer em music_volume no config nao consegue mais estourar o
+# pico: o multiplicador e cortado para caber aqui.
+TETO_DA_TRILHA = 0.085
+
+SWELL_PEAK = 2.2      # multiplicador do volume de base no topo (cortado pelo teto)
 SWELL_IN = 1.2        # tempo subindo, terminando no comeco da ultima cena
 SWELL_HOLD = 0.4      # tempo no topo
 SWELL_OUT = 2.5       # tempo voltando ao volume de base
 
 
-def _ganho_trilha(t, virada: float | None, narration_end: float, total: float):
+def _ganho_trilha(t, virada: float | None, narration_end: float, total: float,
+                  volume_base: float = 0.06):
     """Multiplicador do volume da trilha em cada instante.
 
     Aceita t escalar ou vetor de amostras, que e como o MoviePy chama."""
@@ -264,9 +275,11 @@ def _ganho_trilha(t, virada: float | None, narration_end: float, total: float):
     ganho = np.ones_like(tempo)
 
     if virada is not None:
+        # o pico efetivo nao passa do teto, seja qual for o volume de base
+        pico = min(SWELL_PEAK, TETO_DA_TRILHA / max(volume_base, 1e-6))
         subida = np.clip((tempo - (virada - SWELL_IN)) / SWELL_IN, 0.0, 1.0)
         descida = 1.0 - np.clip((tempo - (virada + SWELL_HOLD)) / SWELL_OUT, 0.0, 1.0)
-        ganho = ganho + (SWELL_PEAK - 1.0) * np.minimum(subida, descida)
+        ganho = ganho + (max(1.0, pico) - 1.0) * np.minimum(subida, descida)
 
     # sem a narracao por cima, o mesmo volume que era "de fundo" passa a soar
     # alto sozinho (feedback real: "a musica no final ficou muito alta"), entao
@@ -277,10 +290,11 @@ def _ganho_trilha(t, virada: float | None, narration_end: float, total: float):
     return ganho
 
 
-def _com_dinamica(music, virada: float | None, narration_end: float, total: float):
+def _com_dinamica(music, virada: float | None, narration_end: float, total: float,
+                  volume_base: float = 0.06):
     def aplica(get_frame, t):
         quadro = get_frame(t)
-        ganho = _ganho_trilha(t, virada, narration_end, total)
+        ganho = _ganho_trilha(t, virada, narration_end, total, volume_base)
         if np.ndim(quadro) == 2:          # bloco de amostras: (n, canais)
             return quadro * np.asarray(ganho).reshape(-1, 1)
         return quadro * ganho             # amostra unica
@@ -307,7 +321,7 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
         # a trilha deixa de ser um tapete de volume fixo e passa a ter dinamica:
         # cresce na virada da historia e some depois da narracao (ver _ganho_trilha)
         virada = scenes[-1]["start"] if len(scenes) > 2 else None
-        music = _com_dinamica(music, virada, narration_end, total)
+        music = _com_dinamica(music, virada, narration_end, total, music_volume)
         tracks.append(music)
 
     # efeitos de cena (vento, chuva, fanfarra...), bem baixos, para dar corpo

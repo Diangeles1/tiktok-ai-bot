@@ -10,6 +10,7 @@ Uso:
     python -m src.push_secrets --conta-cloudflare --token-cloudflare
     python -m src.push_secrets --gemini
 """
+import re
 import sys
 import webbrowser
 
@@ -43,9 +44,12 @@ NEW_KEYS = {
     # nos tocaria e redistribuir o clipe "standalone, sem esforco criativo
     # aplicado", que nao e o caso: entra narracao, legenda, cartao e correcao
     # de cor por cima.
-    # A chave vem no formato "12345678-abc123...", com digitos e um hifen.
+    # A chave vem no formato "12345678-abc123...": digitos, um hifen, e o resto
+    # em hexadecimal. O teste e por esse desenho, e nao so por tamanho e hifen:
+    # uma URL qualquer na area de transferencia ("https://site.com/algo-assim")
+    # passaria no teste frouxo e entraria no .env no lugar da chave.
     "--pixabay": ("PIXABAY_API_KEY", "chave da API do Pixabay",
-                  lambda v: 25 <= len(v) <= 60 and "-" in v),
+                  lambda v: bool(re.fullmatch(r"\d{6,12}-[0-9a-f]{20,40}", v))),
 }
 
 GEMINI_KEY_URL = "https://aistudio.google.com/apikey"

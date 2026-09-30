@@ -6,10 +6,10 @@ content_mode: "cenas"
 
 language: "pt-BR"
 # Kokoro roda local (sem custo, sem depender da nuvem da Microsoft) e a voz
-# "santa" (pm_santa) tem o tom grave e cadenciado que a narracao biblica pede.
-# ATENCAO: o timing de palavra do Kokoro em pt-BR e estimado por tamanho do
-# fonema, nao medido (ver src/tts_kokoro.py) — confira a sincronia da legenda
-# no video antes de espalhar. tts_rate nao se aplica ao Kokoro (so ao edge).
+# "santa" (pm_santa) tem o tom grave e cadenciado que a narracao bíblica pede.
+# ATENÇÃO: o timing de palavra do Kokoro em pt-BR e estimado por tamanho do
+# fonema, não medido (ver src/tts_kokoro.py) — confira a sincronia da legenda
+# no video antes de espalhar. tts_rate não se aplica ao Kokoro (só ao edge).
 # Para voltar ao edge-tts: tts_provider: "edge" e tts_voice de volta para
 # "pt-BR-AntonioNeural".
 tts_provider: "kokoro"
@@ -28,16 +28,16 @@ branding:
   handle: "@candeiabiblica"
   watermark_enabled: true
   watermark_opacity: 0.35
-  # Cartao de texto pedindo inscricao no fim do video, usado so enquanto
+  # Cartao de texto pedindo inscricao no fim do video, usado só enquanto
   # assets/voz estiver vazia (ver sfx.assinatura_enabled e main.py). Descomente
   # para trocar o texto padrao; quando gravar sua voz, o audio toma o lugar dele.
-  # subscribe_text: "Curtiu? Deixa o like e se inscreve para mais historias"
+  # subscribe_text: "Curtiu? Deixa o like e se inscreve para mais histórias"
   watermark_repeats: 4     # quantas vezes a marca aparece ao longo do video
 
 # Personagem original fixo do canal. A imagem e gerada UMA vez
 # (python -m src.generate_character) e reaproveitada em todo video, pra manter
 # a cara do personagem sempre igual. Troque a descricao por qualquer conceito
-# original que voce quiser (evite copiar um personagem/pessoa real existente).
+# original que você quiser (evite copiar um personagem/pessoa real existente).
 character:
   name: "Seu Waldemar"
   description: >
@@ -48,12 +48,12 @@ character:
   seed: 424242
 
 niche: >
-  historias cristas recontadas como narrativa: passagens dos evangelhos sobre
-  Jesus Cristo, historias do Antigo Testamento e vidas de santos da tradicao
+  histórias cristas recontadas como narrativa: passagens dos evangelhos sobre
+  Jesus Cristo, histórias do Antigo Testamento e vidas de santos da tradicao
   catolica. Linguagem simples e respeitosa, com tensao crescente e uma virada
   que ensina algo no final
 
-# Horarios de publicacao em UTC. O Brasil e UTC-3, entao 09 UTC = 06h, 15 UTC =
+# Horarios de publicacao em UTC. O Brasil e UTC-3, então 09 UTC = 06h, 15 UTC =
 # 12h e 23 UTC = 20h no horario de Brasilia: manha (devocional), almoco e noite.
 # O bot deduz do relogio qual publicacao esta rodando, para cada uma pegar um
 # tema diferente. Precisa casar com os cron em .github/workflows/daily-post.yml.
@@ -72,45 +72,45 @@ scenes:
   # SDXL: testado lado a lado, o SDXL erra a mao com frequencia (uma cena
   # real saiu com 6 dedos) e o Flux acerta melhor mao e rosto. A cena aberta
   # (wide shot, aerial view) continua no SDXL, que aceita a proporcao
-  # vertical nativa; o Flux so devolve quadrado, e cortar a lateral custaria
+  # vertical nativa; o Flux só devolve quadrado, e cortar a lateral custaria
   # a paisagem. false volta tudo para o SDXL.
   melhor_mao: true
 
   # Flux 2 Klein no lugar do SDXL e do Flux 1: ele devolve o vertical nativo
-  # (896x1600), entao a cena nao e mais CORTADA na lateral, e a ampliacao na
+  # (896x1600), então a cena não e mais CORTADA na lateral, e a ampliacao na
   # montagem cai de 1,87x para 1,2x. E ele respeita "painterly oil texture": o
   # Flux 1 ignorava e entregava FOTO, que e o que fazia a cena com gente
   # parecer banco de imagem.
-  # O tamanho e 1600 de altura e nao os 1920 do video de proposito: gasta ~42%
+  # O tamanho e 1600 de altura e não os 1920 do video de proposito: gasta ~42%
   # da cota diaria gratuita em vez de ~80%, deixando folga para retentativa.
   # Ver FLUX2_MAX_SIDE em src/images.py antes de subir. false volta tudo.
   flux2: true
-  # Cada cena recebe a anterior como referencia visual, entao o video parece o
+  # Cada cena recebe a anterior como referencia visual, então o video parece o
   # mesmo lugar filmado de outro angulo em vez de quadros soltos. Quando a
-  # historia troca de lugar de verdade, a descricao da cena vence a referencia.
-  # Exige flux2: os modelos antigos nao aceitam imagem de referencia.
+  # história troca de lugar de verdade, a descricao da cena vence a referencia.
+  # Exige flux2: os modelos antigos não aceitam imagem de referencia.
   # DESLIGADO por enquanto: o efeito foi validado em 3 imagens soltas (a cena 3
   # manteve o tumulo, o vale e a montanha da cena 1), mas nunca num video
   # inteiro de 6 a 9 cenas encadeadas. O risco aberto e DERIVA: as cenas podem
-  # ir ficando parecidas demais, ou uma cena ignorar a propria descricao porque
+  # ir ficando parecidas demais, ou uma cena ignorar a própria descricao porque
   # a referencia dominou. Ligar depois de rodar um video completo e conferir.
   continuidade: false
   # Reserva para quando a cota diaria gratuita da Cloudflare acabar (10.000
-  # neuronios; no uso normal o canal gasta 28% a 42%, entao isso e raro).
-  # true: o video termina na Pollinations, que e aberta e nao usa essa cota. A
+  # neuronios; no uso normal o canal gasta 28% a 42%, então isso e raro).
+  # true: o video termina na Pollinations, que e aberta e não usa essa cota. A
   #   imagem dela sai BEM pior e fora do estilo do canal (testado: pedimos
   #   mulher chorando diante do tumulo e veio uma figura azul sem rosto, sem
   #   tumulo). A marca d'agua dela e cortada automaticamente, senao o TikTok
   #   desqualifica da monetizacao.
-  # false: a publicacao daquele horario simplesmente nao sai.
+  # false: a publicacao daquele horario simplesmente não sai.
   # E escolha de dono de canal: post pior ou post nenhum.
   reserva_pollinations: true
 
   gap_seconds: 0.25   # respiro entre a fala de uma cena e a da proxima
 
-# Como cada figura da Biblia e desenhada. A mesma descricao entra em toda cena
+# Como cada figura da Bíblia e desenhada. A mesma descricao entra em toda cena
 # em que o nome aparece, senao Jesus sai louro numa cena e moreno na outra.
-# Fiel ao primeiro seculo na Judeia: pele morena, cabelo e barba escuros, linho
+# Fiel ao primeiro século na Judeia: pele morena, cabelo e barba escuros, linho
 # sem tintura. Nada de foto de pessoa real: e sempre pintura.
 personagens:
   - nomes: ["Jesus", "Christ", "Cristo"]
@@ -165,12 +165,12 @@ video:
   # Na cena com gente (medium shot), separa um "primeiro plano" (recorte central,
   # onde a pessoa costuma estar) que se move mais rapido que o resto da imagem,
   # fundido por uma borda suave (ver _parallax_move em src/video.py). Sem
-  # modelo de profundidade nenhum: e so a diferenca de velocidade entre as duas
+  # modelo de profundidade nenhum: e só a diferenca de velocidade entre as duas
   # camadas que da a sensacao de profundidade, em vez de zoom sobre foto parada.
   parallax_effect: true
   crossfade_seconds: 0.6    # duracao da transicao entre cenas
-  # O video cortava no milissegundo da ultima palavra, o que da sensacao de
-  # video interrompido. A ultima imagem fica esse tempo a mais, com a musica
+  # O video cortava no milissegundo da última palavra, o que da sensacao de
+  # video interrompido. A última imagem fica esse tempo a mais, com a musica
   # terminando por cima.
   tail_seconds: 1.2
   # Leve realce de cor no video inteiro. A imagem do gerador sai um pouco
@@ -178,17 +178,17 @@ video:
   color_boost: 1.12
   # Acabamento de cinema no encode final: contraste, luz quente com sombra
   # azulada (o contraste de cor do "golden hour"), vinheta puxando o olho para
-  # o centro e grao de filme. O grao tambem quebra a lisura de imagem gerada
+  # o centro e grao de filme. O grao também quebra a lisura de imagem gerada
   # por IA, que e o que mais denuncia video automatico. Ver ACABAMENTO em
   # src/video.py para mexer nos valores. false desliga.
   acabamento: true
 
 # Fase do canal. Estrategia de crescimento em duas etapas:
-#  - "crescimento": a conta ainda nao e monetizada, entao nao ha motivo para
-#    passar de 1 minuto (so video acima de 1 minuto rende no Creator Rewards, e
-#    so conta monetizada recebe). Video curto e mais barato de assistir ate o
+#  - "crescimento": a conta ainda não e monetizada, então não ha motivo para
+#    passar de 1 minuto (só video acima de 1 minuto rende no Creator Rewards, e
+#    só conta monetizada recebe). Video curto e mais barato de assistir até o
 #    fim, retencao alta empurra o alcance, e alcance vira seguidor.
-#  - "monetizacao": a conta ja bateu os requisitos, e todo video precisa passar
+#  - "monetizacao": a conta já bateu os requisitos, e todo video precisa passar
 #    de 1 minuto para contar.
 # Troque para "monetizacao" quando a conta for aceita no programa.
 fase: "crescimento"
@@ -198,106 +198,106 @@ fases:
     # Medido na execucao real com tts_rate +8%: 171 palavras deram 65,4s
     # contando as pausas entre cenas, ou seja 2,6 palavras por segundo.
     # 118 a 145 palavras dao de 45 a 56 segundos, ainda abaixo de 1 minuto.
-    # Subiu de 90-115 porque naquele teto a historia virava sinopse: Jerico
+    # Subiu de 90-115 porque naquele teto a história virava sinopse: Jerico
     # inteira em 112 palavras, com cena de 10 palavras e final sem desfecho.
     min_narration_words: 118
     max_narration_words: 145
     # Mais cenas para o mesmo minuto: a imagem troca a cada 6s em vez de 8s.
     min_scenes: 6
     max_scenes: 9
-    min_duration_seconds: 0       # nao ha minimo nesta fase
+    min_duration_seconds: 0       # não ha minimo nesta fase
     # Quem pede a inscricao e a voz do dono, gravada, no fim do video (ver
-    # sfx.assinatura). Pedir tambem na narracao soaria dobrado, entao aqui a
-    # ultima cena so deixa o gancho para a proxima historia.
+    # sfx.assinatura). Pedir também na narracao soaria dobrado, então aqui a
+    # última cena só deixa o gancho para a proxima história.
     cta: >
-      A ULTIMA cena termina a historia: o que aconteceu com quem viveu aquilo, e
+      A ÚLTIMA cena termina a história: o que aconteceu com quem viveu aquilo, e
       uma frase curta do que isso significa. Nada de pergunta no fim, nada de
-      convite vago. NAO peca inscricao, curtida nem compartilhamento: isso e
+      convite vago. NÃO peca inscricao, curtida nem compartilhamento: isso e
       dito depois, por outra voz.
   monetizacao:
     # Calibrado com medicao real: a voz Antonio le 2,42 palavras por segundo no
     # ritmo padrao, o que dava 64s com 155 palavras. Com tts_rate em +8% a
     # leitura ficou 8,3% mais rapida (medido: a mesma frase caiu de 7,30s para
-    # 6,74s), entao 155 palavras passariam a dar 59s. O minimo sobe junto.
+    # 6,74s), então 155 palavras passariam a dar 59s. O minimo sobe junto.
     min_narration_words: 168
     max_narration_words: 220
     min_scenes: 8
     max_scenes: 14
-    min_duration_seconds: 60      # abaixo disso nao rende no Creator Rewards
+    min_duration_seconds: 60      # abaixo disso não rende no Creator Rewards
     cta: >
-      A ULTIMA cena fecha com um convite curto para acompanhar o canal, no
-      maximo uma frase, nascido do assunto da historia. Convide a voltar para a
-      proxima historia.
+      A ÚLTIMA cena fecha com um convite curto para acompanhar o canal, no
+      maximo uma frase, nascido do assunto da história. Convide a voltar para a
+      proxima história.
 
 script:
   model: "openai/gpt-oss-120b"   # modelo da Groq usado para escrever o roteiro
 
   # Regras extras coladas no prompt do roteiro. Aqui ficam as travas que este
-  # nicho exige e que nao valeriam para outro tipo de canal.
+  # nicho exige e que não valeriam para outro tipo de canal.
   extra_rules: >
-    - Reconte a historia com AS SUAS PROPRIAS PALAVRAS. Nunca cite versiculo
-      literal de traducao moderna da Biblia (NVI, NAA, NTLH e afins sao
-      protegidas por direito autoral, e copia tambem derruba a originalidade
+    - Reconte a história com AS SUAS PROPRIAS PALAVRAS. Nunca cite versículo
+      literal de traducao moderna da Bíblia (NVI, NAA, NTLH e afins são
+      protegidas por direito autoral, e copia também derruba a originalidade
       exigida pelos programas de monetizacao).
-    - Seja fiel ao que a passagem ou a tradicao conta. Nao invente acontecimento
-      nem doutrina. Em historia de santo, fique no que a tradicao registra.
+    - Seja fiel ao que a passagem ou a tradicao conta. Não invente acontecimento
+      nem doutrina. Em história de santo, fique no que a tradicao registra.
     - Tom respeitoso e acolhedor. Nunca ataque, compare ou diminua outra religiao,
       denominacao ou crenca.
     - Nas descricoes visuais, prefira ambiente, objeto, paisagem, luz e silhueta
       vista de longe. Nunca peca rosto de figura sagrada: o gerador erra rosto
-      com frequencia e o resultado fica irreverente. Nao cite parte do corpo
-      como assunto da imagem, nem mesmo maos: mostre a acao pelo objeto ou pelo
-      ambiente (a jarra derramando, e nao as maos derramando).
+      com frequencia e o resultado fica irreverente. Não cite parte do corpo
+      como assunto da imagem, nem mesmo mãos: mostre a acao pelo objeto ou pelo
+      ambiente (a jarra derramando, e não as mãos derramando).
 
   # Estilos de abertura, girando um por publicacao. A primeira frase e o que
   # decide a retencao, e girar entre formatos serve para MEDIR: com um estilo
-  # fixo nao da para saber qual prende mais. O nome de cada um sai no log e no
-  # metadata.json do video, entao depois de umas semanas voce compara a
-  # retencao no YouTube Studio e mantem so os que ganharam.
+  # fixo não da para saber qual prende mais. O nome de cada um sai no log e no
+  # metadata.json do video, então depois de umas semanas você compara a
+  # retencao no YouTube Studio e mantem só os que ganharam.
   hooks:
     - name: "pergunta"
       instruction: >
-        Abra com uma pergunta direta ao espectador que ele nao consiga responder
-        sem assistir ao video inteiro. A pergunta NAO pode entregar o desfecho:
-        "voce ja imaginou perder tudo e ainda ser recebido com festa?" ja conta o
-        fim e nao serve.
+        Abra com uma pergunta direta ao espectador que ele não consiga responder
+        sem assistir ao video inteiro. A pergunta NÃO pode entregar o desfecho:
+        "você já imaginou perder tudo e ainda ser recebido com festa?" já conta o
+        fim e não serve.
     - name: "meio-da-acao"
       instruction: >
-        Comece no instante de maior tensao da historia, sem nenhuma apresentacao.
-        O contexto aparece so depois, na segunda ou terceira cena.
+        Comece no instante de maior tensao da história, sem nenhuma apresentacao.
+        O contexto aparece só depois, na segunda ou terceira cena.
     - name: "detalhe-estranho"
       instruction: >
-        Abra citando um detalhe concreto e curioso da historia, algo especifico
+        Abra citando um detalhe concreto e curioso da história, algo especifico
         e inesperado que faca a pessoa querer entender de onde aquilo vem.
     - name: "convite"
       # Pedido do dono do canal (23/09/2026): abrir direto com o convite e o
-      # versiculo, sem gancho de tensao. A frase de referencia que ja vem
-      # logo depois (regra fixa do prompt) entrega o "Versiculo X" sozinha,
-      # entao aqui so o convite. Girando junto dos outros ganchos para medir
+      # versículo, sem gancho de tensao. A frase de referencia que já vem
+      # logo depois (regra fixa do prompt) entrega o "Versículo X" sozinha,
+      # então aqui só o convite. Girando junto dos outros ganchos para medir
       # se prende mais ou menos que eles antes de virar o padrao.
       instruction: >
         Abra com um convite direto e curto, sempre neste formato ou bem
-        parecido: "Vamos ouvir uma historia de Deus?" (variacoes como "Vamos
-        ouvir uma historia da Biblia?" tambem servem). Sem gancho de tensao,
-        sem detalhe da historia, sem pergunta que entregue o desfecho: e so o
+        parecido: "Vamos ouvir uma história de Deus?" (variacoes como "Vamos
+        ouvir uma história da Bíblia?" também servem). Sem gancho de tensao,
+        sem detalhe da história, sem pergunta que entregue o desfecho: e só o
         convite, puro e curto.
     - name: "fato-chocante"
       # Pedido do dono do canal (23/09/2026): abrir com um fato concreto e
       # forte, no estilo "ele estava morto ha quatro dias". Um gancho parecido
-      # ("contraintuitivo", ver ganchos_desativados) ja distorceu a passagem
-      # em 7 de 10 testes quando pedia so "seja surpreendente" sem essa trava:
-      # aqui o fato tem que ser algo que JA ESTA no texto, nao uma surpresa
+      # ("contraintuitivo", ver ganchos_desativados) já distorceu a passagem
+      # em 7 de 10 testes quando pedia só "seja surpreendente" sem essa trava:
+      # aqui o fato tem que ser algo que JÁ ESTA no texto, não uma surpresa
       # inventada pelo modelo.
       instruction: >
-        Abra com um fato concreto e impactante que JA ESTA na propria
+        Abra com um fato concreto e impactante que JÁ ESTA na própria
         passagem ou na tradicao: uma condicao, um tempo ou um numero que
-        sozinho gera tensao (ex.: "estava morto havia quatro dias", "tres
-        vezes antes do galo cantar", "sete voltas ao redor da muralha"). Nao
+        sozinho gera tensao (ex.: "estava morto havia quatro dias", "três
+        vezes antes do galo cantar", "sete voltas ao redor da muralha"). Não
         invente o fato nem exagere numero ou tempo: use exatamente o que o
-        texto registra. Nao entregue o desfecho, so o fato inicial que cria a
+        texto registra. Não entregue o desfecho, só o fato inicial que cria a
         pergunta.
 
-  # Fora da rotacao: o codigo so le "hooks". Em 16 geracoes de teste, com tres
+  # Fora da rotacao: o codigo só le "hooks". Em 16 geracoes de teste, com três
   # versoes diferentes da instrucao, este gancho distorceu a passagem com
   # frequencia (milagre inventado, fome negada, acao trocada, expectativa
   # fabricada). Ele pede surpresa e o modelo entrega surpresa as custas da
@@ -305,51 +305,51 @@ script:
   # de preferencia com outro modelo.
   ganchos_desativados:
     # Tirado da rotacao em 20/09/2026, com dado: os videos que abriam
-    # entregando o final sao todos deste gancho ("Ele terminou na escuridao
+    # entregando o final são todos deste gancho ("Ele terminou na escuridao
     # eterna...", "Davi poupou a vida de Saul, mostrando que..."), e o de 422
     # views, que usou ele, teve 92,4% de saida nos primeiros segundos. Em
     # formato curto, contar o fim na primeira frase tira o motivo de ficar.
     # Para reativar, teste contra os outros ganchos e compare a retencao.
     - name: "final-primeiro"
       instruction: >
-        Abra revelando o resultado final da historia e depois volte para contar
-        como se chegou ate ali.
+        Abra revelando o resultado final da história e depois volte para contar
+        como se chegou até ali.
     - name: "contraintuitivo"
       # Historico: pedir uma afirmacao que "soasse improvavel" fez o modelo
       # distorcer a passagem em 7 de 10 testes (milagre inventado, fome negada,
       # acao trocada). A surpresa agora vem de uma quebra de expectativa que o
-      # proprio texto registra, entao os dois lados sao fatos da passagem.
+      # próprio texto registra, então os dois lados são fatos da passagem.
       instruction: >
-        Abra com uma quebra de expectativa que a propria passagem registra: o
-        que alguem da historia esperava, ou o que parecia obvio, contra o que de
+        Abra com uma quebra de expectativa que a própria passagem registra: o
+        que alguem da história esperava, ou o que parecia obvio, contra o que de
         fato aconteceu. Os DOIS lados precisam estar no texto biblico ou na
         tradicao. Exemplo do tipo certo, sobre Davi: "Saul vestiu Davi com a
-        propria armadura para a luta, e Davi tirou tudo antes de sair." Nao
-        invente fato, nao exagere detalhe (tempo, quantidade, o que alguem
-        comeu, bebeu ou sofreu), nao negue o que o texto afirma e nao troque o
+        própria armadura para a luta, e Davi tirou tudo antes de sair." Não
+        invente fato, não exagere detalhe (tempo, quantidade, o que alguem
+        comeu, bebeu ou sofreu), não negue o que o texto afirma e não troque o
         que a pessoa fez.
 
   # Padroes narrativos, girando um por publicacao, independente do tema.
-  # A ideia vem de canais que catalogam video por ESTRUTURA e nao por assunto:
-  # o que se repete e da audiencia e o formato da historia, nao o personagem.
+  # A ideia vem de canais que catalogam video por ESTRUTURA e não por assunto:
+  # o que se repete e da audiencia e o formato da história, não o personagem.
   # Combinando arco x tema x gancho, o mesmo tema volta meses depois contado de
   # outro jeito, e o nome do arco vai no metadata.json para depois comparar
-  # retencao e manter so os que seguram o espectador.
+  # retencao e manter só os que seguram o espectador.
   arcs:
     - name: "queda-e-resgate"
       instruction: >
         Estruture como queda e resgate: mostre primeiro o fundo do poco, o mais
-        baixo que a pessoa chegou, e so depois o socorro que veio.
+        baixo que a pessoa chegou, e só depois o socorro que veio.
     - name: "duvida-e-prova"
       instruction: >
-        Estruture em torno de uma duvida: alguem nao acredita, resiste ou
-        questiona, e a historia caminha ate o momento em que ele nao consegue
+        Estruture em torno de uma duvida: alguem não acredita, resiste ou
+        questiona, e a história caminha até o momento em que ele não consegue
         mais negar o que viu.
     - name: "obediencia-custosa"
       instruction: >
-        Estruture como uma ordem dificil: alguem recebe uma instrucao que parece
-        absurda ou humilhante, paga um preco para obedecer, e so entao entende.
-    - name: "ultimo-vira-primeiro"
+        Estruture como uma ordem difícil: alguem recebe uma instrucao que parece
+        absurda ou humilhante, paga um preco para obedecer, e só então entende.
+    - name: "último-vira-primeiro"
       instruction: >
         Estruture como inversao: quem era ignorado, desprezado ou considerado o
         menos provavel e exatamente quem e escolhido no final.
@@ -359,8 +359,8 @@ script:
         tempo de vazio, e o que voltou diferente do que era antes.
     - name: "encontro-que-muda-tudo"
       instruction: >
-        Estruture em torno de um unico encontro: a pessoa antes, o encontro, e a
-        pessoa depois. O contraste entre o antes e o depois e o coracao do video.
+        Estruture em torno de um único encontro: a pessoa antes, o encontro, e a
+        pessoa depois. O contraste entre o antes e o depois e o coração do video.
     - name: "promessa-que-demora"
       instruction: >
         Estruture em torno da espera: a promessa vem cedo e demora anos para se
@@ -368,36 +368,36 @@ script:
         antes do cumprimento.
 
   # Mistura de tipos de conteudo, uma sequencia por horario de publicacao.
-  # Antes os 103 temas giravam numa lista unica, entao os tipos saiam na
+  # Antes os 103 temas giravam numa lista única, então os tipos saiam na
   # proporcao em que aparecem na lista, sem controle: parabola de ensinamento
   # caia em horario nobre e milagre caia de manha, ao acaso.
   # Agora cada horario tem uma identidade, e quem assiste sempre as 20h encontra
   # sempre o mesmo tipo de video. A sequencia de cada horario tem 10 posicoes
-  # (uma por dia), e o dia escolhe a posicao. Somando os tres horarios, os 30
+  # (uma por dia), e o dia escolhe a posicao. Somando os três horarios, os 30
   # videos de cada 10 dias saem na proporcao 40% surpreendente, 30% personagem,
-  # 20% milagre e 10% reflexao.
-  # Para mudar o peso de um tipo, troque as palavras aqui: o codigo so conta.
+  # 20% milagre e 10% reflexão.
+  # Para mudar o peso de um tipo, troque as palavras aqui: o codigo só conta.
   mistura:
-    # 06h: historia surpreendente, o tipo que mais rendeu ate agora
-    - ["surpreendente", "surpreendente", "surpreendente", "reflexao",
+    # 06h: história surpreendente, o tipo que mais rendeu até agora
+    - ["surpreendente", "surpreendente", "surpreendente", "reflexão",
        "surpreendente", "surpreendente", "surpreendente", "surpreendente",
-       "reflexao", "surpreendente"]
-    # 12h: um personagem (santo ou figura biblica) por dia
+       "reflexão", "surpreendente"]
+    # 12h: um personagem (santo ou figura bíblica) por dia
     - ["personagem", "personagem", "personagem", "personagem", "personagem",
-       "personagem", "personagem", "personagem", "personagem", "reflexao"]
-    # 20h: milagre e revelacao, com historia surpreendente no fim do ciclo
+       "personagem", "personagem", "personagem", "personagem", "reflexão"]
+    # 20h: milagre e revelacao, com história surpreendente no fim do ciclo
     - ["milagre", "milagre", "milagre", "milagre", "milagre", "milagre",
        "surpreendente", "surpreendente", "surpreendente", "surpreendente"]
 
   # Os temas, agrupados pelo tipo que a "mistura" acima sorteia. Dentro do
   # grupo a escolha continua deterministica e sem estado entre execucoes, e
-  # continua pulando pela lista (ver _spread_stride) para nao publicar dois
+  # continua pulando pela lista (ver _spread_stride) para não publicar dois
   # temas vizinhos em dias seguidos.
-  # Cada grupo precisa de tema suficiente para nao repetir cedo: no ritmo
+  # Cada grupo precisa de tema suficiente para não repetir cedo: no ritmo
   # acima, "surpreendente" sai 12 vezes a cada 10 dias, "personagem" 9,
-  # "milagre" 6 e "reflexao" 3.
+  # "milagre" 6 e "reflexão" 3.
   topics:
-    # Historia com virada, perseguicao, risco de morte ou desfecho inesperado.
+    # História com virada, perseguicao, risco de morte ou desfecho inesperado.
     # E o grupo do horario da manha e da sobra da noite: 12 dos 30 videos.
     surpreendente:
       # --- Jesus: infancia e inicio do ministerio ---
@@ -413,18 +413,18 @@ script:
       - "A pesca milagrosa depois da noite inteira sem nada"
       # --- Jesus: paixao e ressurreicao ---
       - "A entrada em Jerusalem sobre um jumento"
-      - "A ultima ceia e o pao repartido"
+      - "A última ceia e o pão repartido"
       - "O lava-pes que ninguem entendeu na hora"
       - "A agonia no jardim de Getsemani"
       - "A traicao selada com um beijo"
-      - "Pedro negando tres vezes antes do galo cantar"
+      - "Pedro negando três vezes antes do galo cantar"
       - "Jesus calado diante de Pilatos"
       - "Simao ajudando a carregar a cruz"
       - "O bom ladrao ao lado na cruz"
       - "A escuridao do meio-dia no calvario"
       - "A pedra encontrada rolada na manha de domingo"
       - "Maria Madalena confundindo Jesus com o jardineiro"
-      - "Os discipulos de Emaus reconhecendo no partir do pao"
+      - "Os discipulos de Emaus reconhecendo no partir do pão"
       - "Tomé, o apóstolo que precisou ver para acreditar"
       - "O peixe assado na praia e o perdao de Pedro"
       - "A ascensao diante dos discipulos"
@@ -434,9 +434,9 @@ script:
       - "A torre de Babel e a confusao das linguas"
       - "Abraao subindo o monte com Isaque"
       - "Jaco lutando a noite inteira com o anjo"
-      - "Jose vendido pelos irmaos e sua ascensao no Egito"
+      - "Jose vendido pelos irmãos e sua ascensao no Egito"
       - "Gideao vencendo com apenas trezentos homens"
-      - "Sansao perdendo e reencontrando sua forca"
+      - "Sansao perdendo e reencontrando sua força"
       - "Rute escolhendo ficar com Noemi"
       - "Davi enfrentando Golias com uma funda"
       - "Davi poupando a vida de Saul na caverna"
@@ -454,28 +454,28 @@ script:
       - "A mulher acusada de adulterio e as pedras no chao"
       - "Nicodemos procurando Jesus de madrugada"
       - "Maria e Marta recebendo Jesus em Betania"
-      - "O jovem rico que nao conseguiu se desfazer do que tinha"
+      - "O jovem rico que não conseguiu se desfazer do que tinha"
       - "Mateus, o cobrador de impostos, chamado da mesa"
-      - "A viuva de Naim e o filho unico no caminho do enterro"
+      - "A viuva de Naim e o filho único no caminho do enterro"
       # --- Santos e tradicao catolica ---
-      - "Sao Francisco de Assis renunciando a riqueza do pai"
-      - "Sao Francisco e o lobo de Gubbio"
+      - "São Francisco de Assis renunciando a riqueza do pai"
+      - "São Francisco e o lobo de Gubbio"
       - "Santa Clara deixando tudo para seguir Francisco"
       - "Santo Antonio e o sermao aos peixes"
-      - "Sao Jose, o pai que confiou sem entender"
-      - "Nossa Senhora de Fatima e os tres pastorinhos"
+      - "São Jose, o pai que confiou sem entender"
+      - "Nossa Senhora de Fatima e os três pastorinhos"
       - "Nossa Senhora de Lourdes e a menina Bernadette"
       - "Nossa Senhora Aparecida encontrada no rio Paraiba"
       - "Nossa Senhora de Guadalupe e as rosas no manto de Juan Diego"
       - "Santa Teresinha e o caminho das coisas pequenas"
       - "Santa Rita de Cassia e o perdao impossivel"
-      - "Sao Judas Tadeu, o santo das causas perdidas"
-      - "Sao Sebastiao amarrado e fiel"
-      - "Padre Pio e as marcas nas maos"
+      - "São Judas Tadeu, o santo das causas perdidas"
+      - "São Sebastiao amarrado e fiel"
+      - "Padre Pio e as marcas nas mãos"
       - "Madre Teresa nas ruas de Calcuta"
       - "Santo Agostinho e a conversao no jardim"
-      - "Sao Paulo, de perseguidor a apostolo"
-      - "Sao Pedro, o pescador que virou pedra"
+      - "São Paulo, de perseguidor a apostolo"
+      - "São Pedro, o pescador que virou pedra"
       - "Frei Galvao, o primeiro santo brasileiro"
       - "Santa Dulce dos Pobres e o hospital que nasceu de nada"
 
@@ -487,10 +487,10 @@ script:
       - "Jesus andando sobre as aguas e Pedro afundando"
       - "A multiplicacao dos paes e dos peixes"
       - "O paralitico descido pelo buraco do telhado"
-      - "O cego de Jerico que nao parou de gritar"
-      - "Os dez leprosos e o unico que voltou para agradecer"
+      - "O cego de Jerico que não parou de gritar"
+      - "Os dez leprosos e o único que voltou para agradecer"
       - "A mulher doente que tocou a barra do manto na multidao"
-      - "A filha de Jairo, quando todos ja choravam"
+      - "A filha de Jairo, quando todos já choravam"
       - "Lazaro chamado de volta do tumulo"
       - "O servo do centurio curado de longe"
       - "A sogra de Pedro curada da febre"
@@ -498,16 +498,16 @@ script:
       # --- Antigo Testamento: milagre e livramento ---
       - "Moises e a sarca que ardia sem se consumir"
       - "Moises e a travessia do Mar Vermelho"
-      - "As muralhas de Jerico caindo apos sete voltas"
+      - "As muralhas de Jerico caindo após sete voltas"
       - "Elias desafiando os profetas de Baal no Carmelo"
       - "Elias alimentado pelos corvos no deserto"
       - "Naamã, o comandante sírio, curado depois de sete banhos no Jordão"
       - "Jonas engolido pelo grande peixe"
-      - "Os tres jovens na fornalha ardente"
+      - "Os três jovens na fornalha ardente"
       - "Daniel na cova dos leoes"
-      - "A viuva de Sarepta e o pote de farinha que nao acabava"
+      - "A viuva de Sarepta e o pote de farinha que não acabava"
 
-    # Parabola: o video termina num ensinamento, nao numa virada de acao.
+    # Parabola: o video termina num ensinamento, não numa virada de acao.
     # E o grupo menor de proposito: 3 dos 30 videos.
     reflexao:
       - "O bom samaritano parando na estrada"
@@ -516,57 +516,57 @@ script:
       - "O semeador e os quatro tipos de terreno"
       - "O grao de mostarda que virou arvore"
       - "As dez virgens e as lampadas sem azeite"
-      - "Os talentos confiados aos tres servos"
+      - "Os talentos confiados aos três servos"
       - "A viuva que deu as duas ultimas moedas"
       - "O rico e o pobre Lazaro na porta"
       - "O fariseu e o publicano orando no templo"
-      - "O servo perdoado pelo rei que nao perdoou o companheiro"
+      - "O servo perdoado pelo rei que não perdoou o companheiro"
       - "O tesouro escondido no campo"
 
 captions:
   words_per_chunk: 3    # quantas palavras aparecem por vez na legenda animada
-  bottom_margin: 420    # distancia da legenda ate a base, em px (a interface do TikTok cobre o rodape)
+  bottom_margin: 420    # distancia da legenda até a base, em px (a interface do TikTok cobre o rodape)
 
-# Capa do video (so o YouTube aceita capa customizada; o TikTok usa um quadro
-# do proprio video). Exige canal verificado por telefone: se nao estiver, o bot
+# Capa do video (só o YouTube aceita capa customizada; o TikTok usa um quadro
+# do próprio video). Exige canal verificado por telefone: se não estiver, o bot
 # avisa e segue, sem perder a publicacao.
 thumbnail:
   enabled: true
   max_lines: 3    # em quantas linhas o texto de impacto pode ser quebrado
 
 sfx:
-  laugh_enabled: false     # risada de grupo no fim (assets/laughs/*.mp3). Combina com humor, nao com historia seria
+  laugh_enabled: false     # risada de grupo no fim (assets/laughs/*.mp3). Combina com humor, não com história seria
   laugh_gap_seconds: 0.4   # pausa entre o fim da narracao e o inicio da risada
   # Assinatura de voz: gravacoes suas fechando o video ("gostou? se inscreve no
-  # canal"), sorteadas a cada video, em assets/voz/. Alem de assinatura do
-  # canal, e a camada humana que a politica de conteudo nao autentico do
+  # canal"), sorteadas a cada video, em assets/voz/. Além de assinatura do
+  # canal, e a camada humana que a politica de conteudo não autentico do
   # YouTube cobra de quem produz com IA. Pasta vazia = sem assinatura.
   assinatura_enabled: true
   assinatura_gap_seconds: 0.45   # pausa entre o fim da narracao e a sua voz
   # Trilha sorteada dentro de assets/music/<clima>/, onde <clima> e o tom geral
-  # que o proprio roteiro classifica (tenso, triunfante ou calmo: ver o campo
+  # que o próprio roteiro classifica (tenso, triunfante ou calmo: ver o campo
   # "clima" em src/script_gen.py). Pasta do clima vazia cai para assets/music/calmo/.
   music_enabled: true
-  music_volume: 0.06       # volume da trilha por baixo da narracao (0 a 1); baixado de 0.10 apos feedback de que estava alta
+  music_volume: 0.06       # volume da trilha por baixo da narracao (0 a 1); baixado de 0.10 após feedback de que estava alta
   # Efeitos de cena (assets/sfx/*.mp3): cada cena pode puxar um ambiente bem
-  # baixo (chuva, agua, multidao, vento...) pela propria descricao visual dela
-  # (ver src/sfx.py _AMBIENCE_KEYWORDS), preso a duracao so daquela cena, e a
-  # ultima ganha um efeito curto de virada (fanfarra ou impacto) batendo com o
-  # clima. Historia "calma" nao ganha efeito de virada: nao ha virada para marcar.
+  # baixo (chuva, agua, multidao, vento...) pela própria descricao visual dela
+  # (ver src/sfx.py _AMBIENCE_KEYWORDS), preso a duracao só daquela cena, e a
+  # última ganha um efeito curto de virada (fanfarra ou impacto) batendo com o
+  # clima. História "calma" não ganha efeito de virada: não ha virada para marcar.
   sfx_enabled: true
 
 tiktok:
   enabled: true
-  privacy_level: "SELF_ONLY"  # apps nao auditados so podem postar como SELF_ONLY (rascunho privado)
-  # "upload": o video cai na caixa de entrada do app e VOCE finaliza a postagem
+  privacy_level: "SELF_ONLY"  # apps não auditados só podem postar como SELF_ONLY (rascunho privado)
+  # "upload": o video cai na caixa de entrada do app e VOCÊ finaliza a postagem
   #   no celular, escolhendo legenda, som e privacidade. Como quem publica e
-  #   voce, sai publico mesmo com o app ainda nao auditado. Exige o escopo
-  #   video.upload. Limite: 5 envios pendentes em 24h, entao finalize os
+  #   você, sai público mesmo com o app ainda não auditado. Exige o escopo
+  #   video.upload. Limite: 5 envios pendentes em 24h, então finalize os
   #   rascunhos todo dia, senao a partir do segundo dia o envio falha.
-  # "direct": o bot publica sozinho, mas app nao auditado so posta privado
+  # "direct": o bot publica sozinho, mas app não auditado só posta privado
   #   (SELF_ONLY). Exige video.publish.
   # Vale para o horario automatico. O TikTok pede que a pessoa confirme cada
-  # post, entao publicar direto e com a tela do painel (painel_direto).
+  # post, então publicar direto e com a tela do painel (painel_direto).
   mode: "upload"
   # O painel mostra a tela de publicar direto no perfil, com tudo que a
   # revisao do app exige: conta que vai receber, quem pode ver (sem opcao
@@ -578,17 +578,17 @@ tiktok:
   # true depois que o TikTok aprovar o app: o painel passa a abrir na
   # publicacao direta em vez de mandar para o app do celular.
   app_aprovado: false
-  # false: o horario automatico do GitHub nao manda nada para o TikTok. O
-  # video fica no painel (que baixa os videos do automatico) e voce posta de
+  # false: o horario automatico do GitHub não manda nada para o TikTok. O
+  # video fica no painel (que baixa os videos do automatico) e você posta de
   # la. Com true, cada horario manda para a caixa de entrada do celular.
   automatico: false
 
 youtube:
   enabled: true
   # declara "conteudo alterado ou sintetico" em cada envio (imagens e narracao
-  # sao de IA). E exigencia do YouTube, e desde 2026 a politica de conteudo nao
+  # são de IA). E exigencia do YouTube, e desde 2026 a politica de conteudo não
   # autentico vale para o canal inteiro: declarar faz parte de seguir
-  # monetizavel. So desligue se um dia o video for 100% gravado por voce.
+  # monetizavel. Só desligue se um dia o video for 100% gravado por você.
   conteudo_sintetico: true
   # true: o video sobe privado com a hora exata marcada (publishAt) e o YouTube
   # publica no minuto certo. E o que corrige o atraso do GitHub Actions, que
@@ -596,19 +596,19 @@ youtube:
   # workflow rode ANTES do horario (ver os cron em daily-post.yml).
   agendar: true
   privacy_status: "public"    # public | unlisted | private
-  category_id: "22"           # 22 = People & Blogs (nao existe categoria de religiao). Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
+  category_id: "22"           # 22 = People & Blogs (não existe categoria de religiao). Lista: https://developers.google.com/youtube/v3/docs/videoCategories/list
   made_for_kids: false
 
 # Cada video sai com no maximo hashtags_max hashtags: as fixas abaixo, que
-# sao as de maior volume do nicho cristao em portugues, e a vaga que sobra
-# fica com a do video (personagem ou tema da historia, gerada pelo LLM), que
-# e a que leva quem procura aquela historia. As fixas vem primeiro porque o
-# YouTube exibe as tres primeiras ao lado do titulo.
-# Nao use #fyp, #viral ou #foryou: nao dizem do que o video trata, e o
+# são as de maior volume do nicho cristão em portugues, e a vaga que sobra
+# fica com a do video (personagem ou tema da história, gerada pelo LLM), que
+# e a que leva quem procura aquela história. As fixas vem primeiro porque o
+# YouTube exibe as três primeiras ao lado do titulo.
+# Não use #fyp, #viral ou #foryou: não dizem do que o video trata, e o
 # YouTube avisa que exagerar em tag pode tirar o video da busca.
-# Repetidas e acentos sao limpos automaticamente (ver src/hashtags.py).
+# Repetidas e acentos são limpos automaticamente (ver src/hashtags.py).
 hashtags_max: 4
 hashtags_extra:
   - "#Jesus"
   - "#Deus"
-  - "#Biblia"
+  - "#Bíblia"

@@ -1,0 +1,2 @@
+# So para o robo do TikTok no PC (o GitHub Actions nao precisa)
+playwright>=1.55
