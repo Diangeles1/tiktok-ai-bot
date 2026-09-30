@@ -28,8 +28,17 @@ Ficam aqui até existir dado para testá-las. Não implemente sem medir.
   trilha por baixo.
 
 ### Instrumentação (pré-requisito de quase tudo)
-- Não há coleta de métrica. Enquanto não houver, melhoria de roteiro e de
-  estrutura não tem como ser justificada pela regra de evidência.
+- **Meio pronto.** `src/analytics.py` coleta e `scripts/relatorio_desempenho.py`
+  compara por gancho, arco e fase. Falta UMA coisa, e só o dono da conta pode
+  fazer: refazer a autorização do Google para conceder
+  `yt-analytics.readonly`, com `python -m src.youtube_oauth_setup`. O escopo já
+  está no setup; o escopo de upload foi deixado intocado de propósito.
+- **A amostra ainda não compara.** 14 vídeos publicados, espalhados em 5 tipos
+  de gancho (1 a 4 por tipo) e 7 arcos (1 a 3 por arco). Mesmo com métrica na
+  mão, diferença entre grupos desse tamanho é variação normal de alcance, não
+  efeito do roteiro. O relatório avisa "amostra pequena" abaixo de 5 por grupo.
+  Antes de comparar ganchos, o canal precisa publicar mais, ou concentrar em
+  menos variantes de propósito.
 
 ## Experimentos concluídos
 

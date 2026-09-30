@@ -19,7 +19,16 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 from src import credentials
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+# Upload continua sendo o escopo principal. A leitura de Analytics entra aqui
+# porque o setup e o UNICO lugar onde escopo novo pode ser concedido: o token
+# ja emitido nao ganha permissao sozinho, e por isso ler metrica exige refazer
+# esta autorizacao uma vez. O cliente de upload (src/youtube_api.py) segue
+# pedindo so o escopo dele, para a publicacao, que hoje funciona, nao depender
+# desta mudanca.
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+]
 
 
 def main() -> None:
