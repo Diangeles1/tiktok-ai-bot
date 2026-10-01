@@ -63,3 +63,49 @@ Ficam aqui até existir dado para testá-las. Não implemente sem medir.
   independentemente do volume base.
 - **Resultado:** pico de `0.132` para `0.085`.
 - **Decisão:** mantido. Falta confirmar de ouvido.
+
+## Linha de base (2026-10-01)
+
+A primeira medição real do canal. Tudo daqui para frente se compara com isto.
+
+**Canal:** 14 vídeos publicados, 13 com dado no Analytics, **2.582 views**,
+**62% assistido** em média.
+
+| gancho | vídeos | assistido | views |
+|---|---|---|---|
+| convite | 1 | 90% | 511 |
+| meio-da-acao | 4 | 68% | 379 |
+| pergunta | 3 | 63% | 480 |
+| detalhe-estranho | 2 | 55% | 250 |
+| final-primeiro | 4 | 51% | 962 |
+
+Melhor vídeo isolado: `BgiXou6SXrQ`, 89,8% assistido e 43s médios, mais que o
+dobro da duração média do canal.
+
+### O que isto NÃO prova, e por quê
+
+A leitura óbvia ("convite é o melhor gancho") é armadilha: é **um** vídeo. Com
+n=1 não há como separar o gancho do tema, do horário ou de sorte do algoritmo.
+
+Pior: os dois vídeos dos pastores aparecem ao mesmo tempo em `convite`, em
+`ultimo-vira-primeiro` e no topo da lista individual. Um vídeo bom infla três
+categorias e **parece três evidências**. Ao ler este relatório, confira se o
+grupo que parece vencer não é o mesmo vídeo contado de novo.
+
+O único sinal que merece ser olhado de novo quando houver amostra:
+`final-primeiro` tem a **maior audiência e a pior retenção** (962 views, 51%),
+o padrão de um gancho que atrai o clique e não segura. Com 4 vídeos ainda cabe
+na variação normal.
+
+### Experimento proposto (não executado: depende de decisão do dono)
+
+Concentrar em DOIS ganchos alternados, `convite` contra `final-primeiro`, em
+vez de sortear entre cinco. Com 3 publicações por dia, dá ~15 de cada em 10
+dias, que é onde a diferença passa a significar algo.
+
+- **Medida:** % assistido médio por gancho
+- **Critério de fracasso:** diferença menor que 8 pontos entre os dois grupos
+  ao fim dos 10 dias significa que o gancho não é a alavanca, e a busca volta
+  para outra variável (tema, primeira frase, duração)
+- **Custo:** reduzir variedade por 10 dias. É mudança de identidade, e por isso
+  não se faz sem o dono decidir.

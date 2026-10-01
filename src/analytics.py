@@ -38,7 +38,37 @@ METRICAS = "views,estimatedMinutesWatched,averageViewDuration,averageViewPercent
 
 
 class SemPermissao(RuntimeError):
-    """O token nao tem o escopo de leitura de Analytics."""
+    """A leitura de Analytics foi recusada."""
+
+
+def _explicar_403(erro) -> str:
+    """Diz o motivo REAL do 403, em vez de chutar.
+
+    A primeira versao culpava o escopo em todo 403, e isso despistou o
+    diagnostico: o token tinha o escopo certo, e o que faltava era a YouTube
+    Analytics API estar ATIVADA no projeto do Google Cloud (ela e separada da
+    Data API v3, que ja estava ativa). Mensagem de erro que adivinha custa mais
+    tempo do que mensagem que repassa o que o servidor disse.
+    """
+    import json
+
+    try:
+        detalhe = json.loads(erro.content.decode("utf-8"))["error"]["message"]
+    except Exception:
+        detalhe = str(erro)
+
+    if "has not been used in project" in detalhe or "is disabled" in detalhe:
+        return (
+            "a YouTube Analytics API nao esta ativada no projeto do Google "
+            "Cloud. Ela e separada da Data API v3. Ative e espere alguns "
+            "minutos. O Google respondeu: " + detalhe
+        )
+    if "insufficient" in detalhe.lower() or "scope" in detalhe.lower():
+        return (
+            "o token nao tem o escopo yt-analytics.readonly. Refaca com "
+            "python -m src.youtube_oauth_setup. O Google respondeu: " + detalhe
+        )
+    return "a API recusou a leitura. O Google respondeu: " + detalhe
 
 
 def _cliente(client_id: str, client_secret: str, refresh_token: str):
@@ -128,10 +158,7 @@ def coletar(client_id: str, client_secret: str, refresh_token: str,
             numeros = metricas_do_video(cliente, video["video_id"])
         except HttpError as erro:
             if erro.resp.status == 403:
-                raise SemPermissao(
-                    "a API respondeu 403. O token provavelmente nao tem o "
-                    "escopo yt-analytics.readonly. Refaca o OAuth."
-                ) from erro
+                raise SemPermissao(_explicar_403(erro)) from erro
             raise
 
         registro = {
@@ -151,3 +178,47 @@ def coletar(client_id: str, client_secret: str, refresh_token: str,
             json.dump(registro, f, ensure_ascii=False, indent=2)
         saida.append(registro)
     return saida
+
+
+def _principal() -> int:
+    """Coleta usando as chaves do .env. E o ponto de entrada do modulo."""
+    from src.env_file import ENV_FILE, read_env_file
+
+    env = read_env_file(ENV_FILE)
+    faltando = [
+        k for k in ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET",
+                    "YOUTUBE_REFRESH_TOKEN")
+        if not env.get(k)
+    ]
+    if faltando:
+        print("faltam chaves no .env: " + ", ".join(faltando))
+        print("rode: python -m src.youtube_oauth_setup")
+        return 1
+
+    try:
+        registros = coletar(
+            env["YOUTUBE_CLIENT_ID"],
+            env["YOUTUBE_CLIENT_SECRET"],
+            env["YOUTUBE_REFRESH_TOKEN"],
+        )
+    except SemPermissao as erro:
+        print(f"sem permissao de leitura: {erro}")
+        return 1
+
+    com_dado = [r for r in registros if not r["metricas"].get("sem_dados")]
+    print(f"{len(registros)} videos consultados, {len(com_dado)} com dado")
+    for r in registros:
+        m = r["metricas"]
+        if m.get("sem_dados"):
+            print(f"  {r['video_id']}  (ainda sem dado no Analytics)")
+            continue
+        print(
+            f"  {r['video_id']}  {m.get('views', 0):5.0f} views  "
+            f"{m.get('averageViewPercentage', 0):5.1f}% assistido  "
+            f"{m.get('averageViewDuration', 0):5.0f}s medios"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_principal())
