@@ -111,6 +111,19 @@ Regras da narracao:
   frase fica DENTRO da primeira cena, colada no gancho, e nao pode ser uma cena
   sozinha nem ganhar enfeite ("onde o duelo acontece", "uma das passagens mais
   conhecidas"). Diz de onde vem e segue a historia.
+- Se a historia NAO esta na Biblia (santo, beato, tradicao da Igreja), essa
+  mesma frase diz a fonte SEM capitulo e SEM versiculo, porque carta,
+  biografia e tradicao nao tem versiculo: "Está nas cartas de Santa
+  Teresinha.", "Está na biografia de Madre Teresa.", "A Igreja conta isso
+  desde o seculo treze." Escrever "capitulo 1, versiculos 1 a 5" para uma
+  fonte que nao tem versiculo e INVENTAR referencia, e a regra de nao
+  inventar vale aqui igual. Na duvida sobre a fonte exata, diga de onde vem
+  de forma mais larga e verdadeira ("Está na tradicao da Igreja.") em vez de
+  precisar um numero que voce nao sabe.
+- Nome de santo e nome proprio: escreva com maiuscula no texto da narracao
+  ("Santa Teresinha", "São Francisco"), nunca "santa teresinha". A narracao
+  vira legenda na tela, e nome proprio em minuscula aparece escrito errado
+  para quem le.
 - Conte UM momento da passagem, nao o capitulo inteiro. Capitulo resumido vira
   lista de acontecimentos e a pessoa nao se liga em nenhum deles. Escolha a cena
   que decide tudo e mostre o que aconteceu ali: quem estava, o que fez, o que
@@ -258,16 +271,35 @@ _PUNCTUATION_FIXES = {
 # 18..."). O modelo erra essa acentuacao com frequencia mesmo com a regra no
 # prompt (ver SCENE_PROMPT_TEMPLATE); a troca aqui e deterministica e segura,
 # nao precisa gastar uma tentativa nova so por causa dela.
-_ESTA_SEM_ACENTO_RE = re.compile(r"\bEsta(?=\s+em\s)")
+_ESTA_SEM_ACENTO_RE = re.compile(r"\bEsta(?=\s+(?:em|n[oa]s?)\s)")
+
+# A MESMA frase quebra de outros dois jeitos quando a fonte NAO e livro da
+# Biblia, porque o molde "Esta em <Livro> <capitulo>" deixa de encaixar. Visto
+# em producao em 01/10/2026, numa historia de santo: "Vamos ouvir uma historia
+# de Deus? esta em as cartas de santa teresinha". Os dois reparos abaixo sao
+# gramatica, nao gosto: em portugues "em" + artigo definido SEMPRE contrai
+# ("em as" nao existe), e frase nao comeca em minuscula. Como sao certezas, nao
+# vale gastar uma tentativa nova no modelo: conserta aqui.
+_EM_ARTIGO = {"a": "na", "o": "no", "as": "nas", "os": "nos"}
+_EM_ARTIGO_RE = re.compile(r"\b([Ee]m)\s+(as|os|a|o)\b")
+_ESTA_MINUSCULO_RE = re.compile(r"(?<=[.?!]\s)est[áa](?=\s+(?:em|n[oa]s?)\s)")
+
+
+def _contrai_em_artigo(m: "re.Match[str]") -> str:
+    """"em as cartas" -> "nas cartas", guardando a maiuscula de quem comecava."""
+    contraida = _EM_ARTIGO[m.group(2).lower()]
+    return contraida.capitalize() if m.group(1)[0] == "E" else contraida
 
 
 def sanitize(value):
-    """Troca pontuacao tipografica pela equivalente comum e corrige o acento de
-    "Esta em" (ver _ESTA_SEM_ACENTO_RE), em todo texto que o modelo devolveu
-    (funciona recursivamente em dict e lista)."""
+    """Troca pontuacao tipografica pela equivalente comum e conserta a frase de
+    referencia (acento de "Esta em", preposicao colada, inicio em minuscula),
+    em todo texto que o modelo devolveu (recursivo em dict e lista)."""
     if isinstance(value, str):
         texto = value.translate(_PUNCTUATION_FIXES)
-        return _ESTA_SEM_ACENTO_RE.sub("Está", texto)
+        texto = _ESTA_SEM_ACENTO_RE.sub("Está", texto)
+        texto = _EM_ARTIGO_RE.sub(_contrai_em_artigo, texto)
+        return _ESTA_MINUSCULO_RE.sub("Está", texto)
     if isinstance(value, dict):
         return {k: sanitize(v) for k, v in value.items()}
     if isinstance(value, list):
@@ -594,9 +626,10 @@ def rotate_by_slot(items: list[dict], today: datetime.date | None = None,
                     slot_index: int = 0, slot_count: int = 1) -> dict | None:
     """Escolhe um item da lista girando por dia e por publicacao.
 
-    Usada para ganchos e para arcos narrativos. Como as duas listas tem
-    tamanhos coprimos (4 e 7), a combinacao gancho+arco so se repete depois de
-    28 publicacoes, em vez de travar sempre no mesmo par."""
+    Usada para ganchos e para arcos narrativos. O que importa e as duas listas
+    terem tamanhos coprimos: com 2 ganchos em rotacao e 7 arcos, a combinacao
+    gancho+arco so se repete depois de 14 publicacoes, em vez de travar sempre
+    no mesmo par. Vale igual com 5 e 7 (35 publicacoes)."""
     if not items:
         return None
     day = (today or datetime.date.today()).toordinal()
@@ -615,6 +648,34 @@ def hook_of_the_slot(hooks: list[dict], today: datetime.date | None = None,
         return None
     day = (today or datetime.date.today()).toordinal()
     return hooks[(day * max(1, slot_count) + slot_index) % len(hooks)]
+
+
+def ganchos_em_rotacao(script_cfg: dict) -> list[dict]:
+    """Os ganchos que realmente giram hoje, com o experimento aplicado.
+
+    Girar entre cinco aberturas mede mal: com tres publicacoes por dia cada
+    gancho sai umas 6 vezes por mes, e 6 amostras nao separam 55% de 68% de
+    retencao, porque o tema e a miniatura mexem mais que isso. Concentrar a
+    rotacao em dois multiplica por 2,5 a amostra de cada um, o que torna a
+    comparacao decidivel em dez dias em vez de meses.
+
+    Nada e apagado: "hooks" continua com as instrucoes dos cinco inteiras, e
+    esvaziar "ganchos_concentrados" devolve a rotacao antiga na hora.
+    """
+    hooks = script_cfg.get("hooks") or []
+    concentrados = {str(n) for n in (script_cfg.get("ganchos_concentrados") or [])}
+    if not concentrados:
+        return hooks
+
+    girando = [h for h in hooks if h.get("name") in concentrados]
+    # Nome errado na lista nao pode zerar a rotacao: sem gancho o roteiro perde
+    # a abertura inteira, que e justamente a parte que decide a retencao.
+    # Melhor girar os cinco do que girar nenhum.
+    if not girando:
+        print("  aviso: ganchos_concentrados nao casou com nenhum gancho; "
+              f"girando os {len(hooks)} de sempre")
+        return hooks
+    return girando
 
 
 def categoria_do_slot(mistura: list[list[str]], today: datetime.date | None = None,

@@ -522,8 +522,9 @@ class Panel:
         hours = cfg.get("posting_hours_utc", [])
         slot = script_gen.current_slot(hours)
         count = max(1, len(hours))
-        hook = script_gen.hook_of_the_slot(script_cfg.get("hooks", []), slot_index=slot,
-                                           slot_count=count)
+        hook = script_gen.hook_of_the_slot(
+            script_gen.ganchos_em_rotacao(script_cfg), slot_index=slot,
+            slot_count=count)
         arc = script_gen.rotate_by_slot(script_cfg.get("arcs", []), slot_index=slot,
                                         slot_count=count)
         brand = cfg.get("branding", {})

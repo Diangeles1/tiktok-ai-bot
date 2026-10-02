@@ -115,7 +115,8 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         mistura=mistura,
     )
     hook = script_gen.hook_of_the_slot(
-        script_cfg.get("hooks", []), today=dia, slot_index=slot, slot_count=slot_count,
+        script_gen.ganchos_em_rotacao(script_cfg), today=dia, slot_index=slot,
+        slot_count=slot_count,
     )
     # o arco define a ESTRUTURA da historia, o gancho define so a primeira
     # frase. Girar os dois em listas de tamanhos coprimos faz o mesmo tema
@@ -263,10 +264,15 @@ def main() -> None:
             ambiente = sfx.ambience_for_scene(scene.get("visual", ""))
             if ambiente:
                 extra_sfx.append({"path": ambiente, "start": scene["start"],
-                                  "duration": scene["duration"] + crossfade, "volume": 0.12})
+                                  "duration": scene["duration"] + crossfade,
+                                  "papel": "ambiente", "volume": 0.12})
         virada = sfx.resolution_cue(clima)
         if virada:
-            extra_sfx.append({"path": virada, "start": scenes[-1]["start"], "volume": 0.22})
+            # o volume aqui e so o fallback: o ganho sai da medicao em
+            # video._ganho_abaixo_da_voz. Com 0.22 fixo a fanfarra saia 0,6 dB
+            # MAIS ALTA que a narracao, e era isso que estourava na ultima cena.
+            extra_sfx.append({"path": virada, "start": scenes[-1]["start"],
+                              "papel": "virada", "volume": 0.22})
         print(f"  Clima: {clima}" + (f" ({len(extra_sfx)} efeito(s) de cena)" if extra_sfx else ""))
 
     video.build_video(

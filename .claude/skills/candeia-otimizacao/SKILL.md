@@ -36,31 +36,38 @@ que você quer fazer. Um "não tenho como saber ainda" honesto vale mais que uma
 mudança bem argumentada e sem base — porque a mudança sem base vai ser seguida
 por outra, e daqui a dez o canal virou outra coisa sem ninguém ter decidido.
 
-### O estado real hoje: não há dados
+### O estado real hoje: dado existe, amostra não
 
 Leia isto antes de prometer qualquer análise de desempenho.
 
-O projeto **não coleta métrica nenhuma**. Não existe módulo que leia YouTube
-Analytics; `src/youtube_api.py` só publica. Há poucos vídeos publicados em
-`output/auto_*/`, e o que se guarda deles é `metadata.json` (tema, narração,
-título) — nada de views, retenção ou conclusão.
+A coleta **está montada e funcionando** desde 2026-10-01: `src/analytics.py`
+puxa views, duração média assistida e % assistida da YouTube Analytics API e
+grava `metricas.json` ao lado do `metadata.json` de cada vídeo, que é o que
+liga o número ao roteiro que o produziu. A primeira medição deu 14 vídeos,
+2.582 views e 62% assistido em média (`references/experimentos.md`).
 
-Isso significa que, hoje, quase toda melhoria de roteiro ou estrutura cai na
-regra acima e **não pode ser feita**. Confirme o estado antes de concluir:
+Para atualizar:
 
 ```bash
-ls -d output/auto_* | wc -l          # quantos vídeos existem
-grep -rl "analytics\|retention" src/  # vazio = ainda sem coleta
+python -m src.analytics                          # coleta
+python scripts/relatorio_desempenho.py           # agrupa por gancho, arco, fase
 ```
 
-Então o primeiro experimento útil deste canal quase certamente é
-**instrumentar**: puxar da YouTube Analytics API, por vídeo, as visualizações,
-a duração média assistida, a porcentagem assistida e a curva de retenção,
-guardando ao lado do `metadata.json` que já existe. O OAuth já está montado
-para publicar, então o caminho é curto.
+O que **não** existe ainda é amostra. Com 3 publicações por dia e cinco
+ganchos girando, cada gancho tinha ~4 vídeos quando a linha de base foi tirada,
+e 4 vídeos não separam 55% de 68%: o tema e a miniatura variam mais que isso.
+Por isso a regra de evidência continua valendo com a mesma força — o risco
+mudou de "não há número" para "há número demais pequeno", que é pior, porque
+parece suficiente.
 
-Sem isso, o que sobra de honesto é: arrumar defeito relatado pelo usuário,
-arrumar bug medido, e registrar hipóteses para testar quando houver dado.
+Antes de concluir qualquer coisa de um grupo, olhe o **n**. Abaixo de 5 vídeos
+o relatório se recusa a comparar de propósito (`MINIMO_PARA_COMPARAR`).
+
+Um experimento está em andamento: a rotação de ganchos está concentrada em
+`meio-da-acao` contra `convite` até 2026-10-11, para que cada um chegue a ~15
+vídeos. Ver `references/experimentos.md` para o critério de fracasso. Enquanto
+ele corre, **não mexa em gancho, nem em outra variável de roteiro**: mudança
+composta não ensina nada.
 
 ## O áudio está congelado
 
@@ -77,6 +84,20 @@ mixagem. Ao fazer, diga o que tocou e o que não tocou.
 O texto que o TTS **lê** não é o sistema de áudio: melhorar o roteiro é
 permitido, e acentuação correta é roteiro (ver armadilhas). Mudar a voz que lê
 o texto não é.
+
+### O que já foi autorizado, e o que continua congelado
+
+Em 2026-10-02 o dono do canal autorizou explicitamente mexer no áudio, com
+reclamação de chiado e de música alta. Foram alterados **o nível de entrega e o
+ganho da trilha**, com medição (ver `references/experimentos.md`):
+
+- o ganho da trilha passou a ser derivado da narração, em vez de constante;
+- o vídeo passou a ser normalizado para −16 LUFS na saída.
+
+**Isso não descongelou o resto.** Voz, TTS, velocidade, pitch, sincronia e os
+arquivos de áudio continuam intocados e continuam congelados. Autorização de
+2026-10-02 valia para aqueles dois defeitos, não para a mixagem inteira: se a
+próxima ideia for sobre voz ou TTS, a regra acima vale igual.
 
 ## A identidade não se negocia
 
