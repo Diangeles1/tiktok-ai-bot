@@ -16,36 +16,15 @@ import glob
 import io
 import json
 import os
-import re
 import sys
 
-# "A ultima frase NUNCA e pergunta" (src/script_gen.py, regra 4 da abertura)
-def fecha_com_pergunta(narracao: list[str]) -> bool:
-    return bool(narracao) and narracao[-1].rstrip().endswith("?")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-# "nunca e formula vaga do tipo 'qual sera o...'": chamar o proximo video troca
-# o fecho da historia por anuncio, e em formato curto isso derruba o fim
-TEASER = re.compile(
-    r"pr[oó]xim[ao]\s+(hist[oó]ria|cap[ií]tulo|v[ií]deo)"
-    r"|qual\s+ser[aá]\s+a\s+pr[oó]xim"
-    r"|descubra\s+no\s+pr[oó]xim",
-    re.IGNORECASE,
-)
-
-# o pior dos tres: o modelo escreve a INSTRUCAO em vez de cumprir ela
-VAZAMENTO = re.compile(
-    r"deixando\s+(a|uma)\s+pergunta\s+no\s+ar"
-    r"|deixando\s+o\s+sil[eê]ncio\s+perguntar"
-    r"|sem\s+fazer\s+a\s+pergunta",
-    re.IGNORECASE,
-)
-
-REGRAS = [
-    ("fecha com pergunta", lambda n: fecha_com_pergunta(n)),
-    ("chama o proximo video", lambda n: bool(TEASER.search(" ".join(n)))),
-    ("INSTRUCAO vazou para a narracao", lambda n: bool(VAZAMENTO.search(" ".join(n)))),
-]
+# A definicao das regras mora em UM lugar: src/script_gen.py, que e quem as
+# aplica na geracao. Este script so mede os roteiros que ja existem. Duplicar
+# os padroes aqui criaria duas versoes da mesma regra em arquivos diferentes,
+# que foi exatamente o bug das duas constantes de volume que ninguem conferia.
+from src.script_gen import regras_do_fecho_quebradas  # noqa: E402
 
 
 def narracao_de(pasta: str) -> list[str]:
@@ -70,7 +49,7 @@ def main() -> int:
         pastas = sorted(os.path.dirname(p)
                         for p in glob.glob(os.path.join("output", "*", "metadata.json")))
 
-    contagem = {nome: 0 for nome, _ in REGRAS}
+    contagem: dict[str, int] = {}
     com_defeito = []
     total = 0
 
@@ -79,9 +58,10 @@ def main() -> int:
         if not narracao:
             continue
         total += 1
-        quebradas = [nome for nome, confere in REGRAS if confere(narracao)]
+        # a mesma funcao que a geracao usa, recebendo cenas no formato dela
+        quebradas = regras_do_fecho_quebradas([{"narration": n} for n in narracao])
         for nome in quebradas:
-            contagem[nome] += 1
+            contagem[nome] = contagem.get(nome, 0) + 1
         if quebradas:
             com_defeito.append((os.path.basename(pasta), quebradas, narracao[-1]))
 
@@ -90,9 +70,11 @@ def main() -> int:
         return 0
 
     print(f"{total} execucoes com narracao\n")
-    for nome, _ in REGRAS:
+    for nome in sorted(contagem, key=contagem.get, reverse=True):
         n = contagem[nome]
-        print(f"  {nome:<34} {n:>3}  ({n/total:.0%})")
+        print(f"  {nome:<40} {n:>3}  ({n/total:.0%})")
+    if not contagem:
+        print("  nenhuma regra do fecho quebrada")
     print(f"\n{len(com_defeito)} de {total} com pelo menos um "
           f"({len(com_defeito)/total:.0%})")
 
@@ -103,8 +85,10 @@ def main() -> int:
             print(f"    {' + '.join(quebradas)}")
             print(f"    ultima frase: ...{ultima[-90:].strip()}")
 
-    # saida 0 sempre: isto mede, nao reprova. Quem reprova e o validador no
-    # momento da geracao, se e quando ele for escrito (ver experimentos.md).
+    # saida 0 sempre: isto mede o que JA foi gerado, nao reprova. Quem reprova e
+    # o validador na hora da geracao (generate_scene_script, que agora recusa o
+    # roteiro e pede de novo). Os defeitos listados aqui sao de antes dele
+    # existir: nao da para consertar roteiro publicado.
     return 0
 
 
