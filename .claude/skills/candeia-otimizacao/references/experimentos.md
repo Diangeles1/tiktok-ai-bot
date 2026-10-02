@@ -124,6 +124,71 @@ print(dict(sorted(dist.items())))
 EOF
 ```
 
+## Defeitos medidos e ainda não corrigidos
+
+Não são hipóteses: foram contados em execuções reais. Ficam aqui porque mexer
+em roteiro durante o experimento do gancho faria as mudanças se confundirem, e
+porque a correção de um deles precisa de decisão do dono do canal.
+
+### O prompt tem regras "NUNCA" que são quebradas em 1 de cada 3 vídeos
+
+Medido em 2026-10-01 sobre as 34 execuções com narração em disco:
+
+| defeito | execuções | o que a regra diz |
+|---|---|---|
+| a última frase é pergunta | 9 (26%) | "A ultima frase NUNCA e pergunta" (`src/script_gen.py:139`) |
+| chama o próximo vídeo | 4 (12%) | "nunca e formula vaga do tipo 'qual sera o...'" |
+| o TEXTO da instrução vazou para a narração | 2 (6%) | — |
+
+11 das 34 (32%) têm pelo menos um. Dois exemplos do vazamento, que são os mais
+graves porque o espectador OUVE a instrução:
+
+- `lote_2026-09-26_2`: "...aceitou o presente, **deixando o silêncio
+  perguntar**: qual será a próxima prova de fé?"
+- `lote_2026-09-25_2`: "...encontraram uma família que abraçava o sofrimento e
+  esperança, **deixando a pergunta no ar**." seguido de "**A próxima história
+  revelará outro milagre inesperado.**"
+
+A instrução no prompt é "Termine deixando uma pergunta no ar, SEM FAZER a
+pergunta", e o modelo escreveu a própria instrução dentro da história. Os dois
+foram publicados.
+
+**Por que isto é corrigível sem pedir evidência nova:** a regra já existe e já
+foi decidida; o que falta é alguém conferir se ela foi cumprida. O projeto já
+tem o padrão pronto para isso (`texto_corrompido()`, que recusa o roteiro e
+gasta uma das `JSON_ATTEMPTS`), então o conserto é um validador que rejeita
+roteiro cuja última frase termine em "?" ou que case com o padrão de teaser e
+de vazamento. Custo: às vezes uma chamada extra na Groq.
+
+### Histórias de santo ganham episódio inventado
+
+Das execuções com tema de santo fora da Bíblia, **3 de 3** inventaram
+acontecimento concreto e verificável:
+
+- Santa Teresinha (01/10): "começou a visitar crianças doentes, entregando-lhes
+  a mesma flor". Era carmelita de clausura, entrou no convento aos 15 anos.
+- Santa Dulce (`lote_2026-09-25_2`, publicado): "vendeu sua própria roupa e
+  passou noites na rua, pedindo migalhas para comprar uma cama velha".
+- Frei Galvão (`lote_2026-09-26_2`, publicado): a cena inteira do menino, do
+  padeiro e das duas jarras de água. Frei Galvão é conhecido pelas pílulas de
+  papel, não por jarras.
+
+A regra existe (`extra_rules`: "Em história de santo, fique no que a tradicao
+registra") e não está sendo cumprida. É o mesmo mecanismo que fez o gancho
+`contraintuitivo` sair da rotação: o modelo entrega o que foi pedido às custas
+da fidelidade.
+
+**Por que isto NÃO é simples como o de cima:** não existe jeito determinístico
+de saber se um episódio está na tradição. Os caminhos possíveis, nenhum testado:
+dar a fonte junto do tema no prompt; restringir a narração a um resumo do que o
+tema já afirma; tirar santo não-bíblico da rotação (28 temas de `personagem`,
+16 de santo, e o slot do meio é 90% `personagem`, então isso mudaria um terço
+das publicações); ou trocar o modelo para essas histórias. Decisão do dono do
+canal, não da skill.
+
+**Como remedir os dois:** o script está em `scripts/` quando existir; por
+enquanto, contar a última frase de cada `metadata.json` em `output/*/`.
+
 ## Experimentos concluídos
 
 ### 2026-09-30 acentuação do prompt
