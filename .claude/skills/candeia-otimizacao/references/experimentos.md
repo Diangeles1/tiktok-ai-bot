@@ -97,15 +97,66 @@ O único sinal que merece ser olhado de novo quando houver amostra:
 o padrão de um gancho que atrai o clique e não segura. Com 4 vídeos ainda cabe
 na variação normal.
 
-### Experimento proposto (não executado: depende de decisão do dono)
+## Experimento 1: concentrar a rotação em dois ganchos
 
-Concentrar em DOIS ganchos alternados, `convite` contra `final-primeiro`, em
-vez de sortear entre cinco. Com 3 publicações por dia, dá ~15 de cada em 10
-dias, que é onde a diferença passa a significar algo.
+**Estado:** em andamento. Autorizado pelo dono do canal em 2026-10-01, decidir
+em 2026-10-11.
 
-- **Medida:** % assistido médio por gancho
-- **Critério de fracasso:** diferença menor que 8 pontos entre os dois grupos
-  ao fim dos 10 dias significa que o gancho não é a alavanca, e a busca volta
-  para outra variável (tema, primeira frase, duração)
-- **Custo:** reduzir variedade por 10 dias. É mudança de identidade, e por isso
-  não se faz sem o dono decidir.
+**Pergunta:** o estilo de abertura muda a retenção?
+
+**Por que concentrar:** com cinco ganchos e três publicações por dia, cada um
+sai umas 6 vezes por mês. Seis amostras não separam 55% de 68%, porque o tema
+e a miniatura mexem mais que isso nessa escala. Dois ganchos alternados dão
+~15 vídeos de cada em 10 dias, e aí a diferença passa a significar algo.
+
+**Mudança:** campo novo `script.ganchos_concentrados` no `config.yaml`, lido
+por `script_gen.ganchos_em_rotacao()`. Lista com nomes = só eles giram; lista
+vazia = voltam os cinco. Nenhuma instrução foi apagada ou movida: as cinco
+continuam inteiras em `script.hooks`.
+
+**Os dois escolhidos, e a correção do par proposto antes:**
+
+A proposta original era `convite` contra `final-primeiro`. Isso estava errado,
+e o erro veio de ler uma versão desatualizada do `config.yaml`:
+**`final-primeiro` já tinha saído da rotação em 20/09/2026, com dado** (o
+vídeo de 422 views que usou esse gancho teve 92,4% de saída nos primeiros
+segundos). Reativá-lo seria desfazer uma decisão que já foi tomada com
+evidência, para medir de novo o que já se mediu. Os 51% dele na linha de base
+são de vídeos anteriores a essa data.
+
+O par executado é:
+
+| papel | gancho | o que se sabe |
+|---|---|---|
+| controle | `meio-da-acao` | padrão de fato do canal: 20 dos 50 vídeos publicados, 68% assistido com n=4. É o número mais confiável que existe aqui. |
+| desafiante | `convite` | dono do melhor vídeo do canal (89,8% assistido), mas com n=1. |
+
+Comparar contra o incumbente é o que torna o resultado acionável: se `convite`
+ganhar, ele vira o padrão. Comparar contra o pior gancho só produziria um
+vencedor que já se esperava.
+
+**Medida:** % assistido médio por gancho, de `scripts/relatorio_desempenho.py`.
+
+**Critério de fracasso, escrito ANTES de ver o resultado:** diferença menor que
+8 pontos de % assistido ao fim dos 10 dias significa que o gancho **não** é a
+alavanca, e a busca passa para outra variável (tema, primeira frase, duração).
+Diferença maior: o perdedor sai da rotação.
+
+**Verificado antes de publicar** (simulação dos 10 dias com o `config.yaml`
+real, pelas funções reais):
+
+- 15 publicações de cada gancho em 10 dias, exatamente
+- 5 de cada em cada um dos três horários (9h, 15h e 23h UTC), então o horário
+  não favorece nenhum dos dois
+- todos os 14 pares gancho+arco aparecem, então nenhum dos dois fica preso a
+  um tipo de história
+- a instrução de cada gancho chega literal ao prompt do roteiro
+- lista vazia, campo ausente ou nome errado na lista: os cinco voltam a girar
+
+**Custo aceito:** 10 dias com menos variedade de abertura, e `fato-chocante`
+(pedido do dono em 23/09/2026) espera a vez para ser medido.
+
+**Armadilha para a leitura do resultado:** 15 vídeos por grupo ainda é pouco
+para diferença pequena. O critério de 8 pontos existe para não transformar
+ruído em decisão. E vale a conferência do costume: se um grupo vencer, veja se
+não é um vídeo bom contado várias vezes.

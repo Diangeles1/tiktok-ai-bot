@@ -594,9 +594,10 @@ def rotate_by_slot(items: list[dict], today: datetime.date | None = None,
                     slot_index: int = 0, slot_count: int = 1) -> dict | None:
     """Escolhe um item da lista girando por dia e por publicacao.
 
-    Usada para ganchos e para arcos narrativos. Como as duas listas tem
-    tamanhos coprimos (4 e 7), a combinacao gancho+arco so se repete depois de
-    28 publicacoes, em vez de travar sempre no mesmo par."""
+    Usada para ganchos e para arcos narrativos. O que importa e as duas listas
+    terem tamanhos coprimos: com 2 ganchos em rotacao e 7 arcos, a combinacao
+    gancho+arco so se repete depois de 14 publicacoes, em vez de travar sempre
+    no mesmo par. Vale igual com 5 e 7 (35 publicacoes)."""
     if not items:
         return None
     day = (today or datetime.date.today()).toordinal()
@@ -615,6 +616,34 @@ def hook_of_the_slot(hooks: list[dict], today: datetime.date | None = None,
         return None
     day = (today or datetime.date.today()).toordinal()
     return hooks[(day * max(1, slot_count) + slot_index) % len(hooks)]
+
+
+def ganchos_em_rotacao(script_cfg: dict) -> list[dict]:
+    """Os ganchos que realmente giram hoje, com o experimento aplicado.
+
+    Girar entre cinco aberturas mede mal: com tres publicacoes por dia cada
+    gancho sai umas 6 vezes por mes, e 6 amostras nao separam 55% de 68% de
+    retencao, porque o tema e a miniatura mexem mais que isso. Concentrar a
+    rotacao em dois multiplica por 2,5 a amostra de cada um, o que torna a
+    comparacao decidivel em dez dias em vez de meses.
+
+    Nada e apagado: "hooks" continua com as instrucoes dos cinco inteiras, e
+    esvaziar "ganchos_concentrados" devolve a rotacao antiga na hora.
+    """
+    hooks = script_cfg.get("hooks") or []
+    concentrados = {str(n) for n in (script_cfg.get("ganchos_concentrados") or [])}
+    if not concentrados:
+        return hooks
+
+    girando = [h for h in hooks if h.get("name") in concentrados]
+    # Nome errado na lista nao pode zerar a rotacao: sem gancho o roteiro perde
+    # a abertura inteira, que e justamente a parte que decide a retencao.
+    # Melhor girar os cinco do que girar nenhum.
+    if not girando:
+        print("  aviso: ganchos_concentrados nao casou com nenhum gancho; "
+              f"girando os {len(hooks)} de sempre")
+        return hooks
+    return girando
 
 
 def categoria_do_slot(mistura: list[list[str]], today: datetime.date | None = None,

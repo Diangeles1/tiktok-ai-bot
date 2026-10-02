@@ -115,7 +115,8 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         mistura=mistura,
     )
     hook = script_gen.hook_of_the_slot(
-        script_cfg.get("hooks", []), today=dia, slot_index=slot, slot_count=slot_count,
+        script_gen.ganchos_em_rotacao(script_cfg), today=dia, slot_index=slot,
+        slot_count=slot_count,
     )
     # o arco define a ESTRUTURA da historia, o gancho define so a primeira
     # frase. Girar os dois em listas de tamanhos coprimos faz o mesmo tema

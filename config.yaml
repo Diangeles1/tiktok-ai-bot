@@ -249,6 +249,35 @@ script:
       como assunto da imagem, nem mesmo mãos: mostre a acao pelo objeto ou pelo
       ambiente (a jarra derramando, e não as mãos derramando).
 
+  # EXPERIMENTO EM ANDAMENTO (comecou em 01/10/2026, decidir em 11/10/2026).
+  # Enquanto esta lista tiver nomes, SO ELES giram; os outros ganchos ficam
+  # parados ate o fim do teste, com as instrucoes intactas logo abaixo.
+  #
+  # POR QUE: com cinco ganchos e tres publicacoes por dia, cada um sai umas 6
+  # vezes por mes. A primeira linha de base do canal deu 90% de retencao em
+  # "convite" e 68% em "meio-da-acao", mas e n=1 contra n=4: nessa amostra o
+  # tema e a miniatura variam mais que o gancho, entao a diferenca nao decide
+  # nada. Concentrando em dois, cada um recebe uns 15 videos em dez dias, e ai
+  # a comparacao passa a significar alguma coisa.
+  #
+  # OS DOIS: "meio-da-acao" e o padrao de fato do canal (20 dos 50 videos
+  # publicados, o numero mais confiavel que existe aqui) e entra como
+  # controle. "convite" e o desafiante: e dele o melhor video do canal, com
+  # 89,8% assistido. Se "convite" ganhar, ele vira o padrao.
+  #
+  # CRITERIO DE FRACASSO, escrito ANTES de olhar o resultado: diferenca menor
+  # que 8 pontos de % assistido depois de dez dias significa que o gancho NAO
+  # e a alavanca, e a busca passa para outra variavel (tema, primeira frase,
+  # duracao). Diferenca maior que isso: o perdedor sai da rotacao.
+  #
+  # CUSTO ACEITO: dez dias com menos variedade de abertura, e "fato-chocante"
+  # (pedido do dono do canal em 23/09/2026) espera a vez para ser medido.
+  #
+  # PARA VOLTAR AOS CINCO, esvazie a lista:   ganchos_concentrados: []
+  ganchos_concentrados:
+    - "meio-da-acao"
+    - "convite"
+
   # Estilos de abertura, girando um por publicacao. A primeira frase e o que
   # decide a retencao, e girar entre formatos serve para MEDIR: com um estilo
   # fixo não da para saber qual prende mais. O nome de cada um sai no log e no
