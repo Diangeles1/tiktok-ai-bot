@@ -28,17 +28,101 @@ Ficam aqui até existir dado para testá-las. Não implemente sem medir.
   trilha por baixo.
 
 ### Instrumentação (pré-requisito de quase tudo)
-- **Meio pronto.** `src/analytics.py` coleta e `scripts/relatorio_desempenho.py`
-  compara por gancho, arco e fase. Falta UMA coisa, e só o dono da conta pode
-  fazer: refazer a autorização do Google para conceder
-  `yt-analytics.readonly`, com `python -m src.youtube_oauth_setup`. O escopo já
-  está no setup; o escopo de upload foi deixado intocado de propósito.
+- **Pronto desde 2026-10-01.** `src/analytics.py` coleta e
+  `scripts/relatorio_desempenho.py` compara por gancho, arco e fase. A
+  autorização com `yt-analytics.readonly` foi refeita e a YouTube Analytics API
+  foi ativada no projeto do Google Cloud (ela é separada da Data API v3, e foi
+  isso que travou a primeira tentativa). O escopo de upload continua intocado.
 - **A amostra ainda não compara.** 14 vídeos publicados, espalhados em 5 tipos
   de gancho (1 a 4 por tipo) e 7 arcos (1 a 3 por arco). Mesmo com métrica na
   mão, diferença entre grupos desse tamanho é variação normal de alcance, não
   efeito do roteiro. O relatório avisa "amostra pequena" abaixo de 5 por grupo.
   Antes de comparar ganchos, o canal precisa publicar mais, ou concentrar em
   menos variantes de propósito.
+
+### Estrutura do roteiro: número de cenas
+
+**Cuidado ao ler isto: a faixa que vale é a da FASE ATIVA.** O `config.yaml`
+tem dois blocos, e só um está em uso. Hoje `fase: crescimento`, que pede **6 a
+9 cenas**. O `min_scenes: 8` que aparece no arquivo é da fase `monetizacao`,
+que **não está ativa**. Comparar o roteiro com o número errado leva a concluir
+defeito onde não há (aconteceu em 2026-10-01, ao conferir um vídeo de teste de
+7 cenas: parecia abaixo do mínimo, estava dentro da faixa).
+
+**O que as 30 execuções de produção desde 2026-09-18 mostram** (quando a fase
+`crescimento` entrou):
+
+| cenas | execuções | |
+|---|---|---|
+| 5 | 9 | abaixo do mínimo |
+| 6 | 12 | dentro |
+| 7 | 8 | dentro |
+| 9 | 1 | dentro |
+
+- **70% dentro da faixa, 30% abaixo**, nenhuma acima do máximo.
+- **29 das 30 ficaram entre 5 e 7**, o fundo da faixa. A metade de cima (8 e 9)
+  aconteceu **uma vez**.
+
+Daí saem duas coisas diferentes, e vale não confundir:
+
+1. **Um defeito pequeno e real:** o mínimo não é validado. Ele só entra no
+   TEXTO do prompt (`src/script_gen.py:153`) e nada confere o JSON que volta,
+   então 9 vídeos saíram com 5 cenas sem ninguém saber. Já existe laço de
+   repetição para JSON inválido; pedir de novo quando vier abaixo da faixa é
+   barato.
+2. **Território não explorado:** o modelo encosta no fundo de qualquer faixa
+   que recebe. Com duração quase fixa, número de cenas é ritmo de corte (6
+   cenas em 50s dão planos de ~8s; 10 dariam ~5s), e **o canal praticamente
+   nunca publicou um vídeo de corte rápido**. Não é que o corte rápido tenha
+   sido testado e perdido: ele nunca existiu.
+
+**O cruzamento com retenção NÃO sustenta nada.** Só 5 execuções têm ao mesmo
+tempo `scenes/` em disco e `metricas.json` (`output/` é ignorado pelo git,
+então pasta antiga some):
+
+| cenas | n | assistido médio |
+|---|---|---|
+| 5 | 2 | 61,0% |
+| 6 | 2 | 48,7% |
+| 7 | 1 | 89,8% |
+
+r = +0,51 com n=5, e o grupo de 7 cenas é UM vídeo: o dos pastores, o mesmo
+que já infla `convite` e `ultimo-vira-primeiro`. Terceira aparição da mesma
+armadilha. Então a motivação aqui é **a faixa de cima nunca ter sido tentada**,
+não um efeito medido.
+
+**O experimento, quando chegar a vez (depois de 2026-10-11):** pedir 6–7 contra
+10–12 cenas, alternando por publicação como no experimento dos ganchos, e
+comparar % assistido com n≥15 de cada. Para o grupo alto existir de verdade,
+primeiro precisa do item 1 acima: sem validar o retorno, o modelo devolve 7 e
+os dois grupos viram o mesmo grupo.
+
+**Critério de fracasso, escrito antes:** diferença menor que 8 pontos de %
+assistido significa que número de cenas não é a alavanca.
+
+**Não implementar agora:** o experimento dos ganchos corre até 2026-10-11, e
+mexer em estrutura de roteiro no meio dele faria as duas mudanças se
+confundirem.
+
+**Como remedir:**
+
+```bash
+python - <<'EOF'
+import glob, os, re, collections
+dist = collections.Counter()
+for d in sorted(glob.glob("output/*/")):
+    nome = os.path.basename(d.rstrip("/\\"))
+    if nome.startswith(("teste", "_test")):
+        continue
+    m = re.search(r"(\d{4}-\d{2}-\d{2})", nome)
+    if not m or m.group(1) < "2026-09-18":
+        continue
+    n = len(glob.glob(os.path.join(d, "scenes", "*.png")))
+    if n:
+        dist[n] += 1
+print(dict(sorted(dist.items())))
+EOF
+```
 
 ## Experimentos concluídos
 

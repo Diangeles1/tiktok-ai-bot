@@ -111,6 +111,19 @@ Regras da narracao:
   frase fica DENTRO da primeira cena, colada no gancho, e nao pode ser uma cena
   sozinha nem ganhar enfeite ("onde o duelo acontece", "uma das passagens mais
   conhecidas"). Diz de onde vem e segue a historia.
+- Se a historia NAO esta na Biblia (santo, beato, tradicao da Igreja), essa
+  mesma frase diz a fonte SEM capitulo e SEM versiculo, porque carta,
+  biografia e tradicao nao tem versiculo: "Está nas cartas de Santa
+  Teresinha.", "Está na biografia de Madre Teresa.", "A Igreja conta isso
+  desde o seculo treze." Escrever "capitulo 1, versiculos 1 a 5" para uma
+  fonte que nao tem versiculo e INVENTAR referencia, e a regra de nao
+  inventar vale aqui igual. Na duvida sobre a fonte exata, diga de onde vem
+  de forma mais larga e verdadeira ("Está na tradicao da Igreja.") em vez de
+  precisar um numero que voce nao sabe.
+- Nome de santo e nome proprio: escreva com maiuscula no texto da narracao
+  ("Santa Teresinha", "São Francisco"), nunca "santa teresinha". A narracao
+  vira legenda na tela, e nome proprio em minuscula aparece escrito errado
+  para quem le.
 - Conte UM momento da passagem, nao o capitulo inteiro. Capitulo resumido vira
   lista de acontecimentos e a pessoa nao se liga em nenhum deles. Escolha a cena
   que decide tudo e mostre o que aconteceu ali: quem estava, o que fez, o que
@@ -260,14 +273,33 @@ _PUNCTUATION_FIXES = {
 # nao precisa gastar uma tentativa nova so por causa dela.
 _ESTA_SEM_ACENTO_RE = re.compile(r"\bEsta(?=\s+em\s)")
 
+# A MESMA frase quebra de outros dois jeitos quando a fonte NAO e livro da
+# Biblia, porque o molde "Esta em <Livro> <capitulo>" deixa de encaixar. Visto
+# em producao em 01/10/2026, numa historia de santo: "Vamos ouvir uma historia
+# de Deus? esta em as cartas de santa teresinha". Os dois reparos abaixo sao
+# gramatica, nao gosto: em portugues "em" + artigo definido SEMPRE contrai
+# ("em as" nao existe), e frase nao comeca em minuscula. Como sao certezas, nao
+# vale gastar uma tentativa nova no modelo: conserta aqui.
+_EM_ARTIGO = {"a": "na", "o": "no", "as": "nas", "os": "nos"}
+_EM_ARTIGO_RE = re.compile(r"\b([Ee]m)\s+(as|os|a|o)\b")
+_ESTA_MINUSCULO_RE = re.compile(r"(?<=[.?!]\s)est[áa](?=\s+(?:em|n[oa]s?)\s)")
+
+
+def _contrai_em_artigo(m: "re.Match[str]") -> str:
+    """"em as cartas" -> "nas cartas", guardando a maiuscula de quem comecava."""
+    contraida = _EM_ARTIGO[m.group(2).lower()]
+    return contraida.capitalize() if m.group(1)[0] == "E" else contraida
+
 
 def sanitize(value):
-    """Troca pontuacao tipografica pela equivalente comum e corrige o acento de
-    "Esta em" (ver _ESTA_SEM_ACENTO_RE), em todo texto que o modelo devolveu
-    (funciona recursivamente em dict e lista)."""
+    """Troca pontuacao tipografica pela equivalente comum e conserta a frase de
+    referencia (acento de "Esta em", preposicao colada, inicio em minuscula),
+    em todo texto que o modelo devolveu (recursivo em dict e lista)."""
     if isinstance(value, str):
         texto = value.translate(_PUNCTUATION_FIXES)
-        return _ESTA_SEM_ACENTO_RE.sub("Está", texto)
+        texto = _ESTA_SEM_ACENTO_RE.sub("Está", texto)
+        texto = _EM_ARTIGO_RE.sub(_contrai_em_artigo, texto)
+        return _ESTA_MINUSCULO_RE.sub("Está", texto)
     if isinstance(value, dict):
         return {k: sanitize(v) for k, v in value.items()}
     if isinstance(value, list):
