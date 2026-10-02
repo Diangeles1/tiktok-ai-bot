@@ -21,11 +21,16 @@ Um experimento por entrada. Sem resultado escrito, o experimento não terminou
 Ficam aqui até existir dado para testá-las. Não implemente sem medir.
 
 ### Áudio (congelado — só registro, ver SKILL.md)
-- O vídeo inteiro mede **−20,8 LUFS** integrado. YouTube e TikTok normalizam
-  para cerca de −14, então a plataforma sobe o áudio ~7 dB, e a trilha sobe
-  junto. Pode ser parte do que se percebe como "música alta".
-- A faixa dinâmica medida é **LRA 2,0 LU**, bem comprimida para narração com
-  trilha por baixo.
+
+A hipótese do nível de entrega que estava aqui **foi confirmada e corrigida em
+2026-10-02**, com autorização explícita do dono. Ver "nível de entrega e ganhos
+medidos" nos concluídos. O resto do áudio (voz, TTS, velocidade, pitch,
+sincronia) continua congelado.
+
+- A faixa dinâmica agora mede **LRA 1,9 LU**, estreita. É consequência de pôr
+  trilha e efeitos longe da voz, e é o normal para narração em formato curto.
+  Se algum dia soar "chapado", a conversa é sobre dinâmica (compressão da voz,
+  trilha com mais variação), e é escolha estética, não defeito.
 
 ### Instrumentação (pré-requisito de quase tudo)
 - **Pronto desde 2026-10-01.** `src/analytics.py` coleta e
@@ -191,6 +196,60 @@ enquanto, contar a última frase de cada `metadata.json` em `output/*/`.
 
 ## Experimentos concluídos
 
+### 2026-10-02 nível de entrega e ganhos medidos
+
+Autorizado explicitamente pelo dono ("o áudio tá com chiado, a música tá alta").
+Duas reclamações, uma raiz: **todo nível de áudio era constante cega.**
+
+**O que estava errado, medido:**
+
+| | medido | referência |
+|---|---|---|
+| entrega do vídeo | −25,4 LUFS | plataformas usam ~−14 |
+| trilha vs voz | 13,3 dB abaixo (10,3 no pico) | locução sobre trilha: 15–20 |
+| `fanfarra` (efeito de virada) vs voz | **0,6 dB ACIMA** | — |
+| `tensao_riser`, `impacto` vs voz | 2,0 e 2,9 dB abaixo | — |
+| ambientes vs voz | 10,3 a 17,5 dB abaixo | — |
+
+O dono apontou dois instantes, e os dois bateram com a medição: **0:37** é o
+início da última cena, onde o efeito de virada dispara (`main.py`, cue com
+`volume: 0.22`); **0:04** é narração com ambiente por cima, e ruído de banda
+larga a 11 dB da fala soa como voz chiando. Confirmado por eliminação: a voz
+isolada, no mesmo nível de entrega, **não chia** (verificado de ouvido pelo
+dono), então o problema era o que vinha somado por cima.
+
+**Por que as correções anteriores falharam.** Duas tentativas baixaram números
+absolutos (0.10 → 0.06, depois teto de 0.085) e a música continuou alta. Não
+podiam funcionar: o que se ouve é a RELAÇÃO com a voz, e a voz também era
+baixa. Pior, as fontes têm níveis muito diferentes entre si (7,7 dB entre as
+trilhas, 25 dB entre os efeitos), então um ganho fixo produz resultados
+diferentes conforme o sorteio do clima.
+
+**O que mudou:** todo ganho passou a ser derivado de medição, contra a
+narração como referência (`src/video.py`):
+
+- trilha 22 dB abaixo da voz, efeito de virada 18 dB, ambiente 26 dB;
+- a narração é medida por **loudness integrada (LUFS), não RMS médio**: o RMS
+  inclui as pausas e variou 2,9 dB entre duas gerações (−26,1 e −29,0),
+  enquanto o LUFS variou 0,85 dB em seis arquivos. Mede-se a mediana de até
+  três cenas;
+- o vídeo é normalizado para −16 LUFS com pico em −2,0 dBTP, depois do mix,
+  copiando o vídeo sem recomprimir (`-c:v copy`);
+- os valores no `config.yaml` e nos cues viraram reserva, usados só se a
+  medição falhar.
+
+**Resultado, no arquivo gerado:** −16,3 LUFS, pico −1,9 dBFS, flat factor 0
+(sem clipagem), as sete trilhas e os dez efeitos todos no mesmo lugar em
+relação à voz. `fanfarra` de ganho 0,22 para 0,026, 18,5 dB mais baixa.
+
+**Decisão:** falta confirmação de ouvido do dono.
+
+**Armadilha que isto deixou registrada:** normalizar para cima levanta tudo
+junto, inclusive a música. Por isso o alvo é −16 e não −14, e a trilha foi para
+22 dB (não 18): o resultado é música mais baixa em termos absolutos do que
+antes, com a voz 9 dB acima. Mexer no alvo de loudness sem mexer na relação
+devolve o problema.
+
 ### 2026-09-30 acentuação do prompt
 - **Hipótese:** a narração pronunciava "istória" porque o texto chegava ao TTS
   sem acento; o prompt em `config.yaml` tinha 32.945 caracteres e **6**
@@ -211,7 +270,11 @@ enquanto, contar a última frase de cada `metadata.json` em `output/*/`.
 - **Mudança:** `TETO_DA_TRILHA = 0.085` em `src/video.py`, cortando o pico
   independentemente do volume base.
 - **Resultado:** pico de `0.132` para `0.085`.
-- **Decisão:** mantido. Falta confirmar de ouvido.
+- **Decisão:** **FALHOU, e foi substituído em 2026-10-02.** Confirmado de
+  ouvido pelo dono: a música continuou alta. O teto não podia resolver, porque
+  o que se ouve é a relação com a voz, e a voz também era baixa. O teto virou
+  só rede de segurança (ver "nível de entrega e ganhos medidos"). Lição: medir
+  o lado que se mexeu e não o que se quer ouvir é meio diagnóstico.
 
 ## Linha de base (2026-10-01)
 

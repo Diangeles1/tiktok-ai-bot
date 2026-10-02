@@ -576,7 +576,16 @@ sfx:
   # que o próprio roteiro classifica (tenso, triunfante ou calmo: ver o campo
   # "clima" em src/script_gen.py). Pasta do clima vazia cai para assets/music/calmo/.
   music_enabled: true
-  music_volume: 0.06       # volume da trilha por baixo da narracao (0 a 1); baixado de 0.10 após feedback de que estava alta
+  # ATENÇÃO: este número virou RESERVA, não é mais o volume de verdade. Desde
+  # 02/10/2026 o ganho da trilha é MEDIDO em cada vídeo: o código mede a
+  # narração, mede a trilha sorteada e calcula o ganho que deixa a música 22 dB
+  # abaixo da voz (TRILHA_ABAIXO_DA_VOZ_DB em src/video.py). O valor fixo aqui
+  # só entra se a medição falhar. Motivo: volume fixo não resolvia, porque o que
+  # se ouve é a RELAÇÃO com a voz, e porque as sete trilhas têm 7,7 dB de
+  # diferença de masterização entre si, então a música ficava alta ou baixa
+  # conforme o clima sorteado. Para mexer no volume da música, mude
+  # TRILHA_ABAIXO_DA_VOZ_DB: número maior = música mais baixa.
+  music_volume: 0.06       # reserva, usada só se a medição falhar
   # Efeitos de cena (assets/sfx/*.mp3): cada cena pode puxar um ambiente bem
   # baixo (chuva, agua, multidao, vento...) pela própria descricao visual dela
   # (ver src/sfx.py _AMBIENCE_KEYWORDS), preso a duracao só daquela cena, e a

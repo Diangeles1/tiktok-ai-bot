@@ -4,6 +4,8 @@ zoom, legendas animadas palavra por palavra, risada e musica de fundo.
 Um video de personagem fixo e so o caso de uma unica cena que dura a narracao
 inteira, entao os dois formatos usam este mesmo caminho."""
 import os
+import statistics
+import subprocess
 
 import numpy as np
 from moviepy.audio.fx.all import audio_fadein, audio_fadeout, audio_loop
@@ -245,25 +247,180 @@ def _pop(clip, canvas_w: int, canvas_h: int, center_y: float,
     return clip.resize(scale).set_position(position)
 
 
-# Dinamica da trilha. O volume de base (sfx.music_volume, 0.06) ja e baixo o
+# ---------------------------------------------------------------------------
+# NIVEL DA TRILHA: medido contra a VOZ, nao escolhido no escuro.
+#
+# Duas reclamacoes de "musica alta" foram atendidas baixando um numero absoluto
+# (0.10 -> 0.06, depois um teto de 0.085) e a musica continuou alta. O numero
+# absoluto nao podia resolver, por dois motivos medidos em 02/10/2026:
+#
+# 1. O que se ouve e a RELACAO com a voz, e a voz tambem e baixa. Medido:
+#    narracao -26,1 dB RMS, trilha em 0.06 -> -39,4 dB RMS, ou seja a musica
+#    ficava 13,3 dB abaixo da voz (10,3 dB no pico do crescimento). A
+#    referencia de locucao sobre trilha e 15 a 20 dB abaixo.
+# 2. As trilhas tem niveis MUITO diferentes entre si: the_journey mede -13,0 dB
+#    RMS e a_new_life -20,7 dB, 7,7 dB de diferenca. Com ganho fixo, o volume
+#    da musica dependia de qual trilha o clima sorteou.
+#
+# Entao o ganho passa a ser DERIVADO: mede-se a narracao, mede-se a trilha, e
+# calcula-se o ganho que coloca a trilha N dB abaixo da voz. Isso corrige os
+# dois de uma vez, e toda trilha nova entra no nivel certo sem ninguem ajustar
+# nada.
+#
+# Por que 22 dB e nao 18: o dono do canal reclamou duas vezes, e feedback
+# repetido do dono e evidencia. Errar para o lado silencioso e barato (a trilha
+# e enfeite), errar para o lado alto atrapalha a narracao, que e o produto.
+TRILHA_ABAIXO_DA_VOZ_DB = 22.0
+
+# Os EFEITOS tinham o mesmo problema da trilha, e pior. Medido em 02/10/2026,
+# com a narracao em -26,2 LUFS:
+#
+#   fanfarra (efeito de virada, volume 0.22) -> -25,6 LUFS: 0,6 dB MAIS ALTA
+#   que a narracao. Ela dispara exatamente no inicio da ultima cena, e foi
+#   isso que o dono do canal ouviu como "em 0:37 o audio estoura".
+#   tensao_riser -> 2,1 dB abaixo da voz. impacto -> 2,9 dB abaixo.
+#
+# Os dez efeitos variam 25 dB entre si (passos -37,3 LUFS, fanfarra -12,5),
+# entao volume fixo no cue nunca podia dar certo: o mesmo 0.22 produz coisas
+# completamente diferentes. Agora cada efeito tambem e medido.
+#
+# Dois alvos, porque os dois papeis sao diferentes: a virada e um acento, tem
+# que ser sentida sem cobrir a frase; o ambiente e textura e precisa ficar bem
+# longe, porque vento e chuva sao ruido de banda larga, que e justamente o que
+# mascara fala (e o que faz a voz parecer que esta chiando).
+VIRADA_ABAIXO_DA_VOZ_DB = 18.0
+AMBIENTE_ABAIXO_DA_VOZ_DB = 26.0
+
+# Nivel de entrega do video inteiro. O mix saia a -25,4 LUFS, cerca de 11 dB
+# abaixo dos -14 que as plataformas usam como alvo. Video baixo faz quem assiste
+# subir o volume do aparelho, e alto-falante de celular no volume maximo
+# distorce: e dai que vinha o "chiado". Normalizar aqui entrega o video no nivel
+# que a plataforma espera, com folga de pico para o codec.
+LOUDNESS_ALVO_LUFS = -16.0
+# -2.0 e nao -1.0: alto-falante de celular distorce bem antes do fundo de
+# escala, e o dono do canal relatou "estoura" com o pico medido em -1,4 dBFS.
+# Meio decibel de folga nao muda a percepcao de volume e tira o risco.
+PICO_VERDADEIRO_DBTP = -2.0
+
+# Dinamica da trilha. O volume de base ja e baixo o
 # bastante para nao disputar com a narracao: o que faltava era o outro lado, a
 # trilha CRESCER. Ela sobe pouco antes da ultima cena, que e onde a historia
 # vira, e volta ao normal enquanto a ultima fala acontece, para o crescimento
 # nao atropelar justamente a frase mais importante.
-# TETO ABSOLUTO da trilha. Existe porque o multiplicador abaixo ja desfez uma
-# correcao uma vez: o volume de base foi baixado de 0.10 para 0.06 depois do
-# feedback de que a musica estava alta, mas o SWELL_PEAK de 2.2 levava o pico
-# para 0.06 x 2.2 = 0.132, ou seja MAIS ALTO que os 0.10 reclamados. Duas
-# constantes em arquivos diferentes, e o produto delas nunca foi conferido.
+# TETO ABSOLUTO da trilha, agora so como rede de seguranca. Ele nasceu porque o
+# SWELL_PEAK desfazia a correcao de volume por tras do pano (0.06 x 2.2 = 0.132,
+# mais alto que os 0.10 que ja tinham sido reclamados): duas constantes em
+# arquivos diferentes e ninguem conferia o produto.
 #
-# Com o teto, mexer em music_volume no config nao consegue mais estourar o
-# pico: o multiplicador e cortado para caber aqui.
-TETO_DA_TRILHA = 0.085
+# Com o ganho DERIVADO da voz (ver TRILHA_ABAIXO_DA_VOZ_DB) o teto deixa de ser
+# o controle principal, e um teto apertado passaria a atrapalhar: medido nas
+# sete trilhas, o pico do crescimento com 22 dB de folga vai de 0.039
+# (the_journey, a mais alta das fontes) a 0.094 (a_new_life, a mais baixa).
+# Um teto de 0.085 cortaria justamente a trilha mais fraca e devolveria a
+# diferenca entre trilhas que a medicao acabou de tirar. Entao o valor fica
+# acima do maximo legitimo, servindo apenas para conter medicao absurda ou
+# config errado.
+TETO_DA_TRILHA = 0.12
 
 SWELL_PEAK = 2.2      # multiplicador do volume de base no topo (cortado pelo teto)
 SWELL_IN = 1.2        # tempo subindo, terminando no comeco da ultima cena
 SWELL_HOLD = 0.4      # tempo no topo
 SWELL_OUT = 2.5       # tempo voltando ao volume de base
+
+
+_LOUDNESS_CACHE: dict = {}
+
+
+def _loudness_db(caminho: str) -> float | None:
+    """Loudness integrada do arquivo (LUFS), pelo loudnorm do ffmpeg.
+
+    O resultado fica em cache por caminho: uma cena com o mesmo ambiente de
+    outra mediria o mesmo arquivo de novo, e cada medicao e um processo de
+    ffmpeg que decodifica o audio inteiro. O arquivo nao muda durante uma
+    execucao, entao medir uma vez basta.
+
+    POR QUE NAO O RMS MEDIO: o RMS inclui o silencio das pausas, entao uma
+    narracao mais pausada mede mais baixa sem a voz ter mudado. Medido em
+    02/10/2026, nas narracoes de duas geracoes: o RMS medio variou 2,9 dB entre
+    elas (-26,1 e -29,0) enquanto a loudness integrada variou 0,85 dB (-25,70 a
+    -26,55 em seis arquivos). A loudness tem gate, ignora os trechos quietos, e
+    e por isso que ela e a medida de "quao alto isso soa".
+
+    Devolve None se nao der para medir, e quem chama cai no valor do config:
+    video sem trilha e pior que video com a trilha no volume de antes.
+    """
+    if caminho in _LOUDNESS_CACHE:
+        return _LOUDNESS_CACHE[caminho]
+
+    try:
+        saida = subprocess.run(
+            ["ffmpeg", "-nostats", "-i", caminho, "-vn",
+             "-af", "loudnorm=print_format=json", "-f", "null", "-"],
+            capture_output=True, timeout=300,
+        ).stderr.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    medido = None
+    for linha in saida.splitlines():
+        if '"input_i"' in linha:
+            bruto = linha.split(":")[1].strip().strip(',').strip('"')
+            try:
+                valor = float(bruto)
+            except ValueError:
+                break
+            # arquivo mudo mede -inf e nao serve de referencia para nada
+            medido = valor if valor > -70 else None
+            break
+
+    _LOUDNESS_CACHE[caminho] = medido
+    return medido
+
+
+def _loudness_da_voz(scenes: list[dict]) -> float | None:
+    """A referencia de nivel do video: a loudness da narracao.
+
+    Tudo o mais (trilha, efeito de virada, ambiente) e posicionado em relacao a
+    ela, porque e ela o produto: musica e efeito existem para servir a fala.
+
+    Usa a MEDIANA de algumas cenas em vez de uma so: uma cena curta ou com mais
+    pausa nao deve decidir o nivel do video inteiro.
+    """
+    medidas = [m for m in (_loudness_db(s["audio"])
+                           for s in scenes[:3] if s.get("audio"))
+               if m is not None]
+    return statistics.median(medidas) if medidas else None
+
+
+def _ganho_abaixo_da_voz(caminho: str, voz: float | None, abaixo_db: float,
+                          fallback: float, rotulo: str,
+                          teto: float = 1.0) -> float:
+    """Ganho que coloca este arquivo `abaixo_db` dB abaixo da narracao.
+
+    Mede os dois lados em vez de confiar em constante, porque os dois variam: a
+    narracao depende da voz do TTS, cada trilha vem com o seu nivel de
+    masterizacao (7,7 dB entre a mais alta e a mais baixa das sete do canal) e
+    os efeitos variam 25 dB entre si (passos -37,3 LUFS, fanfarra -12,5). Com
+    ganho fixo, o volume dependia de qual arquivo o roteiro sorteou.
+
+    Falhando a medicao, devolve o valor de antes: video com o audio de antes e
+    melhor que video sem trilha ou sem efeito.
+
+    O `teto` e rede de seguranca contra medicao absurda, e por isso e diferente
+    para cada uso: a trilha tem o seu (TETO_DA_TRILHA), e o efeito aceita ate
+    ganho 1.0, porque um efeito gravado baixo (passos mede -37,3 LUFS) precisa
+    LEGITIMAMENTE de ganho alto para chegar ao alvo. Usar o teto da trilha para
+    tudo prendia justamente os efeitos mais quietos no lugar errado.
+    """
+    nivel = _loudness_db(caminho)
+    if nivel is None or voz is None:
+        print(f"  {rotulo}: nao consegui medir, usando o volume fixo ({fallback})")
+        return fallback
+
+    ganho = min(10 ** ((voz - abaixo_db - nivel) / 20), teto)
+    print(f"  {rotulo}: voz {voz:.1f} LUFS, fonte {nivel:.1f} LUFS, "
+          f"ganho {ganho:.4f} ({abaixo_db:.0f} dB abaixo da voz)")
+    return ganho
 
 
 def _ganho_trilha(t, virada: float | None, narration_end: float, total: float,
@@ -315,7 +472,16 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
     if assinatura_path:
         tracks.append(AudioFileClip(assinatura_path).set_start(narration_end + assinatura_gap))
 
+    # a narracao e a referencia de nivel de tudo o que vem por cima, e e medida
+    # uma vez so: trilha e efeitos se posicionam em relacao a ela
+    voz = _loudness_da_voz(scenes)
+
     if music_path:
+        # o volume do config e o fallback: o valor usado sai da medicao
+        music_volume = _ganho_abaixo_da_voz(music_path, voz,
+                                             TRILHA_ABAIXO_DA_VOZ_DB,
+                                             music_volume, "trilha",
+                                             teto=TETO_DA_TRILHA)
         music = AudioFileClip(music_path).volumex(music_volume)
         music = audio_loop(music, duration=total)
         # a trilha deixa de ser um tapete de volume fixo e passa a ter dinamica:
@@ -325,12 +491,21 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
         tracks.append(music)
 
     # efeitos de cena (vento, chuva, fanfarra...), bem baixos, para dar corpo
-    # ao momento sem competir com a narracao. Cada item: path, start, volume e,
+    # ao momento sem competir com a narracao. Cada item: path, start, papel e,
     # opcionalmente, duration (sem isso toca ate o fim do video: certo para um
     # efeito curto de virada, errado para um ambiente que deveria sumir com a
-    # cena que o chamou).
+    # cena que o chamou) e volume, que hoje e so o fallback da medicao.
+    #
+    # O "papel" decide a distancia da voz: a virada e um acento e pode chegar
+    # mais perto; o ambiente e textura e fica longe, porque vento e chuva sao
+    # ruido de banda larga e e esse tipo de som que mascara a fala.
     for cue in (extra_sfx or []):
-        efeito = AudioFileClip(cue["path"]).volumex(cue.get("volume", 0.2))
+        abaixo = (VIRADA_ABAIXO_DA_VOZ_DB if cue.get("papel") == "virada"
+                  else AMBIENTE_ABAIXO_DA_VOZ_DB)
+        ganho = _ganho_abaixo_da_voz(cue["path"], voz, abaixo,
+                                      cue.get("volume", 0.2),
+                                      f"efeito {os.path.basename(cue['path'])}")
+        efeito = AudioFileClip(cue["path"]).volumex(ganho)
         duracao_max = max(0.5, min(cue.get("duration", total), total - cue["start"]))
         if efeito.duration > duracao_max:
             efeito = efeito.subclip(0, duracao_max)
@@ -343,6 +518,79 @@ def _build_audio(scenes: list[dict], narration_end: float, total: float,
     # taxa diferente (a trilha, por exemplo) sai reamostrado errado
     mistura.fps = max(getattr(t, "fps", 0) or 0 for t in tracks) or 44100
     return mistura, tracks
+
+
+def _normalizar_loudness(caminho: str) -> bool:
+    """Entrega o video no nivel que as plataformas usam como alvo.
+
+    POR QUE: o mix saia a -25,4 LUFS, cerca de 11 dB abaixo do alvo. Video
+    baixo faz quem assiste subir o volume do aparelho, e alto-falante de celular
+    no volume maximo distorce. O "chiado" relatado nasce ai, e nenhuma mudanca
+    de mixagem resolve, porque o problema e o nivel de ENTREGA.
+
+    Duas passagens, que e como o loudnorm funciona de verdade: a primeira mede o
+    arquivo inteiro, a segunda aplica com a medida na mao. Em uma passagem o
+    filtro trabalha no escuro e o resultado fica longe do alvo.
+
+    O VIDEO E COPIADO, nunca recomprimido ("-c:v copy"): so o audio e
+    reescrito, entao a imagem sai identica. Se qualquer passo falhar, o arquivo
+    original fica intacto e a publicacao segue com o audio de antes.
+    """
+    alvo = (f"I={LOUDNESS_ALVO_LUFS}:TP={PICO_VERDADEIRO_DBTP}:LRA=11")
+
+    try:
+        medida = subprocess.run(
+            ["ffmpeg", "-nostats", "-i", caminho, "-vn",
+             "-af", f"loudnorm={alvo}:print_format=json", "-f", "null", "-"],
+            capture_output=True, timeout=600,
+        ).stderr.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError) as erro:
+        print(f"  AVISO: nao consegui medir o loudness ({erro}); audio sai como estava")
+        return False
+
+    campos = {}
+    for chave in ("input_i", "input_tp", "input_lra", "input_thresh"):
+        for linha in medida.splitlines():
+            if f'"{chave}"' in linha:
+                bruto = linha.split(":")[1].strip().strip(',').strip('"')
+                try:
+                    campos[chave] = float(bruto)
+                except ValueError:
+                    pass
+                break
+    if len(campos) < 4 or any(v == float("-inf") for v in campos.values()):
+        print("  AVISO: medida de loudness incompleta; audio sai como estava")
+        return False
+
+    aplicado = (
+        f"loudnorm={alvo}"
+        f":measured_I={campos['input_i']}"
+        f":measured_TP={campos['input_tp']}"
+        f":measured_LRA={campos['input_lra']}"
+        f":measured_thresh={campos['input_thresh']}"
+    )
+    temporario = caminho + ".loudnorm.mp4"
+    try:
+        feito = subprocess.run(
+            ["ffmpeg", "-nostats", "-v", "error", "-y", "-i", caminho,
+             "-c:v", "copy", "-af", aplicado,
+             "-c:a", "aac", "-b:a", "192k", "-ar", "44100", temporario],
+            capture_output=True, timeout=1800,
+        )
+    except (OSError, subprocess.SubprocessError) as erro:
+        print(f"  AVISO: normalizacao falhou ({erro}); audio sai como estava")
+        return False
+
+    if feito.returncode != 0 or not os.path.exists(temporario):
+        print("  AVISO: normalizacao falhou; audio sai como estava")
+        if os.path.exists(temporario):
+            os.remove(temporario)
+        return False
+
+    os.replace(temporario, caminho)
+    print(f"  audio normalizado: {campos['input_i']:.1f} -> "
+          f"{LOUDNESS_ALVO_LUFS:.0f} LUFS, pico em {PICO_VERDADEIRO_DBTP} dBTP")
+    return True
 
 
 def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path: str,
@@ -519,5 +767,11 @@ def build_video(scenes: list[dict], width: int, height: int, fps: int, out_path:
     final.close()
     for clip in scene_clips + caption_clips + watermark_clips + subscribe_clips + audio_tracks:
         clip.close()
+
+    # O nivel de entrega e a ultima coisa a acertar, com o mix ja escrito: medir
+    # antes seria medir um audio que ainda vai mudar. E vem DEPOIS de fechar os
+    # clipes porque no Windows o os.replace falha enquanto alguem tem o arquivo
+    # aberto, e o MoviePy so solta o handle no close.
+    _normalizar_loudness(out_path)
 
     return out_path

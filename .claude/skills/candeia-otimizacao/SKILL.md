@@ -85,6 +85,20 @@ O texto que o TTS **lê** não é o sistema de áudio: melhorar o roteiro é
 permitido, e acentuação correta é roteiro (ver armadilhas). Mudar a voz que lê
 o texto não é.
 
+### O que já foi autorizado, e o que continua congelado
+
+Em 2026-10-02 o dono do canal autorizou explicitamente mexer no áudio, com
+reclamação de chiado e de música alta. Foram alterados **o nível de entrega e o
+ganho da trilha**, com medição (ver `references/experimentos.md`):
+
+- o ganho da trilha passou a ser derivado da narração, em vez de constante;
+- o vídeo passou a ser normalizado para −16 LUFS na saída.
+
+**Isso não descongelou o resto.** Voz, TTS, velocidade, pitch, sincronia e os
+arquivos de áudio continuam intocados e continuam congelados. Autorização de
+2026-10-02 valia para aqueles dois defeitos, não para a mixagem inteira: se a
+próxima ideia for sobre voz ou TTS, a regra acima vale igual.
+
 ## A identidade não se negocia
 
 Preservar: identidade visual, estilo narrativo, temática, formato, o jeito de

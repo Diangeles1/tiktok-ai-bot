@@ -271,7 +271,7 @@ _PUNCTUATION_FIXES = {
 # 18..."). O modelo erra essa acentuacao com frequencia mesmo com a regra no
 # prompt (ver SCENE_PROMPT_TEMPLATE); a troca aqui e deterministica e segura,
 # nao precisa gastar uma tentativa nova so por causa dela.
-_ESTA_SEM_ACENTO_RE = re.compile(r"\bEsta(?=\s+em\s)")
+_ESTA_SEM_ACENTO_RE = re.compile(r"\bEsta(?=\s+(?:em|n[oa]s?)\s)")
 
 # A MESMA frase quebra de outros dois jeitos quando a fonte NAO e livro da
 # Biblia, porque o molde "Esta em <Livro> <capitulo>" deixa de encaixar. Visto
