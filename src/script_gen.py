@@ -124,6 +124,20 @@ Regras da narracao:
   ("Santa Teresinha", "São Francisco"), nunca "santa teresinha". A narracao
   vira legenda na tela, e nome proprio em minuscula aparece escrito errado
   para quem le.
+- EM HISTORIA DE SANTO, conte SO o episodio que o tema nomeia, e nada mais.
+  Isto e a regra mais importante do roteiro de santo, e ela existe porque o
+  erro ja aconteceu tres vezes em tres: inventou-se Santa Teresinha visitando
+  criancas doentes (ela era carmelita de clausura e nao saia do convento),
+  Santa Dulce vendendo a propria roupa na rua, e uma cena inteira de Frei
+  Galvao com duas jarras de agua. Nada disso esta na tradicao. Entao:
+  NAO invente episodio, NAO invente dialogo, NAO invente numero ("tres dias",
+  "sete voltas"), NAO invente personagem secundario ("a madre superiora
+  pediu", "o padeiro sussurrou"), NAO invente milagre.
+  Se voce nao sabe o que aconteceu naquele episodio com seguranca, conte o que
+  se sabe de forma mais larga e verdadeira (o que a pessoa fez da vida, o que
+  ela ensinou, por que e lembrada) em vez de criar uma cena. Historia
+  verdadeira e menos detalhada e melhor que cena inventada: inventar sobre
+  santo ofende quem acredita, e e exatamente o oposto do que este canal faz.
 - Conte UM momento da passagem, nao o capitulo inteiro. Capitulo resumido vira
   lista de acontecimentos e a pessoa nao se liga em nenhum deles. Escolha a cena
   que decide tudo e mostre o que aconteceu ali: quem estava, o que fez, o que
@@ -425,7 +439,8 @@ def _request_scene_script(ask_fn, niche: str, language: str,
                            extra_rules: str | None = None,
                            hook: dict | None = None, arc: dict | None = None,
                            min_scenes: int = MIN_SCENES, max_scenes: int = MAX_SCENES,
-                           cta: str | None = None) -> dict:
+                           cta: str | None = None,
+                           instrucao_categoria: str | None = None) -> dict:
     prompt = SCENE_PROMPT_TEMPLATE.format(
         niche=niche, language=language, min_words=min_words, max_words=max_words,
         min_scenes=min_scenes, max_scenes=max_scenes,
@@ -451,6 +466,23 @@ def _request_scene_script(ask_fn, niche: str, language: str,
         prompt += f"\nTema de hoje (mantenha este tema): {seed_topic}\n"
     else:
         prompt += f"\nEvite temas obvios/repetidos. Semente aleatoria: {random.randint(1, 999999)}\n"
+
+    # O formato proprio do horario vai POR ULTIMO, e dizendo em voz alta que
+    # substitui as regras da primeira frase. A primeira versao colocava isto no
+    # meio do prompt e o formato PERDEU: o template tem quatro regras numeradas
+    # e insistentes sobre a primeira frase, e o modelo seguiu aquelas. O video
+    # de teste abriu com "Um homem cansado carregava sacos de pedra no mercado"
+    # em vez de "Versículo do dia". Instrucao que precisa vencer vem no fim e
+    # diz o que ela substitui.
+    if instrucao_categoria:
+        prompt += (
+            "\nFORMATO DESTE VIDEO, e ele VENCE o que foi dito antes: as quatro "
+            "regras da primeira frase (nao entregar o fim, nao apresentar "
+            "contexto, palavra do dia a dia, terminar deixando pergunta no ar) "
+            "valem para o CORPO da historia, mas a ABERTURA e a estrutura "
+            "obedecem ao formato abaixo, nao a elas.\n"
+            f"{instrucao_categoria}\n"
+        )
 
     data = ask_fn(prompt)
 
@@ -852,7 +884,8 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
                            max_words: int = 220, extra_rules: str | None = None,
                            hook: dict | None = None, arc: dict | None = None,
                            min_scenes: int = MIN_SCENES, max_scenes: int = MAX_SCENES,
-                           cta: str | None = None) -> dict:
+                           cta: str | None = None,
+                           instrucao_categoria: str | None = None) -> dict:
     """Gera o roteiro do dia dividido em cenas, para o formato narrado sobre
     imagens que mudam. Mesma politica de retentativa do formato de personagem:
     narracao curta demais nao passa de 1 minuto e perde a monetizacao.
@@ -872,7 +905,8 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
     for attempt in range(1, MAX_ATTEMPTS + 1):
         data = _request_scene_script(ask_fn, niche, language, min_words,
                                       max_words, seed_topic, extra_rules, hook, arc,
-                                      min_scenes, max_scenes, cta)
+                                      min_scenes, max_scenes, cta,
+                                      instrucao_categoria)
         word_count = scene_word_count(data)
         entrega = hook_entrega_fim(data["scenes"][0]["narration"])
         cliche = cliche_na_narracao(data["scenes"])

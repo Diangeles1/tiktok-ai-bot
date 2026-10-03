@@ -63,11 +63,17 @@ parece suficiente.
 Antes de concluir qualquer coisa de um grupo, olhe o **n**. Abaixo de 5 vídeos
 o relatório se recusa a comparar de propósito (`MINIMO_PARA_COMPARAR`).
 
-Um experimento está em andamento: a rotação de ganchos está concentrada em
-`meio-da-acao` contra `convite` até 2026-10-11, para que cada um chegue a ~15
-vídeos. Ver `references/experimentos.md` para o critério de fracasso. Enquanto
-ele corre, **não mexa em gancho, nem em outra variável de roteiro**: mudança
-composta não ensina nada.
+**Nenhum experimento está em andamento.** O de concentração de ganchos foi
+cancelado em 2026-10-03, depois de um dia, porque o dono pediu formato próprio
+por horário, que é mudança maior do que a diferença que ele mediria. Então a
+pergunta "qual gancho prende mais" **segue sem resposta**, e hoje a rotação usa
+um gancho só (`pergunta-da-dor`), por pedido dele.
+
+Consequência prática para quem for propor algo: o canal mudou bastante em
+02 e 03/10 (áudio, formato da manhã, gancho único, temas de santo reescritos).
+Tudo isso entra junto na métrica, então os números dos próximos dias **não
+separam** o efeito de cada mudança. Comparar com a linha de base de 01/10 diz
+se o conjunto melhorou, não qual parte.
 
 ## O áudio está congelado
 
