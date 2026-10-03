@@ -129,43 +129,88 @@ print(dict(sorted(dist.items())))
 EOF
 ```
 
-## Defeitos medidos e ainda não corrigidos
-
-Não são hipóteses: foram contados em execuções reais. Ficam aqui porque a
-correção depende de decisão do dono do canal, não de mais medição.
-
-### Histórias de santo ganham episódio inventado
-
-Das execuções com tema de santo fora da Bíblia, **3 de 3** inventaram
-acontecimento concreto e verificável:
-
-- Santa Teresinha (01/10): "começou a visitar crianças doentes, entregando-lhes
-  a mesma flor". Era carmelita de clausura, entrou no convento aos 15 anos.
-- Santa Dulce (`lote_2026-09-25_2`, publicado): "vendeu sua própria roupa e
-  passou noites na rua, pedindo migalhas para comprar uma cama velha".
-- Frei Galvão (`lote_2026-09-26_2`, publicado): a cena inteira do menino, do
-  padeiro e das duas jarras de água. Frei Galvão é conhecido pelas pílulas de
-  papel, não por jarras.
-
-A regra existe (`extra_rules`: "Em história de santo, fique no que a tradicao
-registra") e não está sendo cumprida. É o mesmo mecanismo que fez o gancho
-`contraintuitivo` sair da rotação: o modelo entrega o que foi pedido às custas
-da fidelidade.
-
-**Por que isto NÃO é simples como o de cima:** não existe jeito determinístico
-de saber se um episódio está na tradição. Os caminhos possíveis, nenhum testado:
-dar a fonte junto do tema no prompt; restringir a narração a um resumo do que o
-tema já afirma; tirar santo não-bíblico da rotação (28 temas de `personagem`,
-16 de santo, e o slot do meio é 90% `personagem`, então isso mudaria um terço
-das publicações); ou trocar o modelo para essas histórias. Decisão do dono do
-canal, não da skill.
-
-**Como remedir:** cruzar o campo `tema` de cada `metadata.json` com a lista
-`script.topics.personagem` do `config.yaml` e ler a narração dos que são de
-santo. Não há como automatizar o julgamento: alguém precisa saber o que a
-tradição registra.
-
 ## Experimentos concluídos
+
+### 2026-10-03 formato por horário, e o fim da invenção em história de santo
+
+Pedido do dono do canal, em três partes: arrumar a invenção nas histórias de
+santo, criar um "Versículo do dia" pela manhã, e deixar os outros vídeos com
+abertura mais apelativa "sem ferir a religião".
+
+**A invenção tinha causa estrutural, e ela estava na lista de temas.** Os três
+casos vinham dos temas que **não nomeiam episódio nenhum**:
+
+| tema | o que nomeava | o que o modelo fez |
+|---|---|---|
+| `Santa Teresinha e o caminho das coisas pequenas` | um conceito | inventou visita a crianças doentes |
+| `Santa Dulce e o hospital que nasceu de nada` | vago | inventou vender a própria roupa |
+| `Frei Galvão, o primeiro santo brasileiro` | só a pessoa | inventou a cena inteira das jarras |
+
+Os temas que nomeiam episódio (`o lobo de Gubbio`, `as rosas no manto de Juan
+Diego`, `a conversão no jardim`) dão ao modelo onde se segurar. Sem episódio
+nomeado, ele preenche o vazio inventando. Então a correção é de **tema**, não
+só de prompt: 11 temas foram reescritos para nomear o episódio que a tradição
+registra, e 1 saiu da rotação (`São Judas Tadeu, o santo das causas perdidas`)
+porque não dá para nomear um episódio dele sem inventar.
+
+Junto, uma trava no prompt: em história de santo, contar SÓ o episódio que o
+tema nomeia, sem inventar diálogo, número, personagem secundário ou milagre, e
+na dúvida contar o que se sabe de forma mais larga em vez de criar cena.
+
+**ATENÇÃO, e isto precisa de conferência humana:** os 11 temas reescritos são o
+melhor entendimento de episódios amplamente documentados, escritos por quem não
+é da área. Fidelidade é justamente o ponto, então vale o dono do canal ler a
+lista `script.topics.personagem` e corrigir o que estiver errado.
+
+**O formato por horário** é mecanismo novo: `script.instrucoes_por_categoria`
+mapeia categoria para uma instrução de formato colada no prompt. Antes a
+categoria do slot só trocava a lista de temas, e todo vídeo saía com a mesma
+forma. A manhã (06h) virou `versiculo`, com 24 versículos em rotação, cada um
+trazendo **a dor que atende** depois do travessão ("para quem está com medo do
+futuro"), que é o que faz a abertura falar com quem assiste em vez de recitar.
+
+O versículo é dito **com as palavras do canal, citando a referência**, nunca
+copiado literal: tradução moderna é protegida por direito autoral e a cópia
+derruba a originalidade que a monetização exige. Essa regra já existia no
+canal; o formato novo a respeita.
+
+**Quando existe formato próprio, o gancho não vai.** Duas instruções
+disputando a primeira frase dão resultado imprevisível, então o formato manda.
+
+**O gancho apelativo** é `pergunta-da-dor`: abre com uma pergunta sobre um medo
+real de quem assiste ("Está com medo do futuro?") e emenda dizendo que a
+história responde. Duas travas escritas na própria instrução, porque é a linha
+entre gancho e engano: a pergunta tem que ser respondida pela passagem (se não
+for, troca-se a pergunta, nunca a história), e não pode prometer o que a
+passagem não dá nem usar sofrimento como isca.
+
+**Efeito colateral medido na proporção:** `surpreendente` caiu de 12 para 4
+aparições a cada 10 dias, porque era ele que ocupava a manhã. Era o tipo que
+mais rendia até aqui. Se o dado mostrar que ele era a razão do desempenho, o
+lugar de devolver espaço é o slot da noite, não a manhã.
+
+**Verificado:** o prompt de cada um dos três horários monta com o conteúdo
+certo (manhã com o formato e sem gancho, tarde e noite com o gancho e sem o
+formato, e a trava de santo nos três); o `conferir_config.py` acusa só as 5
+chaves novas, nenhuma sumiu e nenhum valor não-texto mudou.
+
+### 2026-10-03 experimento dos ganchos, CANCELADO
+
+Rodou um dia, de 01/10 a 02/10, e não respondeu nada.
+
+A concentração em `meio-da-acao` contra `convite` precisava de 10 dias para dar
+~15 vídeos de cada. A mudança de formato por horário pedida em 02/10 é maior
+que a diferença que o experimento mediria: continuar seria comparar dois
+ganchos dentro de dois formatos diferentes, o que não decide nada.
+
+**Decisão:** cancelado, sem conclusão. A pergunta "qual gancho prende mais"
+segue aberta, e hoje a rotação usa um gancho só (`pergunta-da-dor`), por pedido
+do dono.
+
+**O que isto custou:** nada de dado, porque não houve dado. O que custou foi a
+oportunidade: enquanto não se concentra a rotação de novo, gancho continua sem
+medição. Para medir algum dia, o jeito é o mesmo: dois nomes em
+`ganchos_concentrados` e 10 dias sem mexer em mais nada.
 
 ### 2026-10-02 validador do fecho
 

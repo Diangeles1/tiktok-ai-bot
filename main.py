@@ -114,7 +114,13 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         script_cfg.get("topics", {}), today=dia, slot_index=slot, slot_count=slot_count,
         mistura=mistura,
     )
-    hook = script_gen.hook_of_the_slot(
+    # Formato proprio deste horario, se houver (ver instrucoes_por_categoria no
+    # config): hoje a manha e o "Versículo do dia". Quando existe formato
+    # proprio, o GANCHO NAO VAI: as duas instrucoes disputariam a primeira
+    # frase, e o resultado seria imprevisivel. O formato manda.
+    instrucao_categoria = (script_cfg.get("instrucoes_por_categoria") or {}).get(categoria)
+
+    hook = None if instrucao_categoria else script_gen.hook_of_the_slot(
         script_gen.ganchos_em_rotacao(script_cfg), today=dia, slot_index=slot,
         slot_count=slot_count,
     )
@@ -126,7 +132,7 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
     )
     print(f"[1/5] Gerando roteiro em cenas (publicacao {slot + 1} de {slot_count}, "
           f"tipo: {categoria or 'livre'}, tema: {seed_topic or 'livre'}, "
-          f"gancho: {hook['name'] if hook else 'livre'}, "
+          f"gancho: {hook['name'] if hook else ('formato ' + categoria if instrucao_categoria else 'livre')}, "
           f"arco: {arc['name'] if arc else 'livre'}, fase: {phase_name})")
     script = script_gen.generate_scene_script(
         niche=cfg["niche"],
@@ -141,6 +147,7 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
         min_scenes=phase["min_scenes"],
         max_scenes=phase["max_scenes"],
         cta=phase.get("cta"),
+        instrucao_categoria=instrucao_categoria,
     )
     # guardados para o metadata.json, que e montado la no main()
     script["_hook"] = hook["name"] if hook else None

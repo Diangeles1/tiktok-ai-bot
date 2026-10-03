@@ -249,34 +249,24 @@ script:
       como assunto da imagem, nem mesmo mãos: mostre a acao pelo objeto ou pelo
       ambiente (a jarra derramando, e não as mãos derramando).
 
-  # EXPERIMENTO EM ANDAMENTO (comecou em 01/10/2026, decidir em 11/10/2026).
-  # Enquanto esta lista tiver nomes, SO ELES giram; os outros ganchos ficam
-  # parados ate o fim do teste, com as instrucoes intactas logo abaixo.
+  # Em rotacao fica SO o gancho desta lista. Lista vazia = os seis giram.
   #
-  # POR QUE: com cinco ganchos e tres publicacoes por dia, cada um sai umas 6
-  # vezes por mes. A primeira linha de base do canal deu 90% de retencao em
-  # "convite" e 68% em "meio-da-acao", mas e n=1 contra n=4: nessa amostra o
-  # tema e a miniatura variam mais que o gancho, entao a diferenca nao decide
-  # nada. Concentrando em dois, cada um recebe uns 15 videos em dez dias, e ai
-  # a comparacao passa a significar alguma coisa.
+  # Hoje: "pergunta-da-dor", pedido do dono do canal em 02/10/2026 para atrair
+  # mais visualizacao. Ele vale para os videos de história (12h e 20h); a manha
+  # tem formato proprio e NAO usa gancho (ver instrucoes_por_categoria).
   #
-  # OS DOIS: "meio-da-acao" e o padrao de fato do canal (20 dos 50 videos
-  # publicados, o numero mais confiavel que existe aqui) e entra como
-  # controle. "convite" e o desafiante: e dele o melhor video do canal, com
-  # 89,8% assistido. Se "convite" ganhar, ele vira o padrao.
+  # O EXPERIMENTO ANTERIOR FOI CANCELADO, e vale registrar por que, para nao
+  # parecer que ele respondeu algo. De 01/10 a 11/10 a rotacao estava
+  # concentrada em "meio-da-acao" contra "convite" para medir qual prende mais,
+  # com ~15 videos de cada. Ele rodou UM dia. A mudanca de formato por horario
+  # e maior do que a diferenca que ele mediria, entao continuar seria comparar
+  # dois ganchos dentro de dois formatos diferentes, o que nao decide nada.
+  # Resultado: a pergunta "qual gancho prende mais" segue sem resposta.
   #
-  # CRITERIO DE FRACASSO, escrito ANTES de olhar o resultado: diferenca menor
-  # que 8 pontos de % assistido depois de dez dias significa que o gancho NAO
-  # e a alavanca, e a busca passa para outra variavel (tema, primeira frase,
-  # duracao). Diferenca maior que isso: o perdedor sai da rotacao.
-  #
-  # CUSTO ACEITO: dez dias com menos variedade de abertura, e "fato-chocante"
-  # (pedido do dono do canal em 23/09/2026) espera a vez para ser medido.
-  #
-  # PARA VOLTAR AOS CINCO, esvazie a lista:   ganchos_concentrados: []
+  # Para medir gancho algum dia, o jeito e o mesmo: por dois nomes aqui e
+  # esperar 10 dias sem mexer em mais nada.
   ganchos_concentrados:
-    - "meio-da-acao"
-    - "convite"
+    - "pergunta-da-dor"
 
   # Estilos de abertura, girando um por publicacao. A primeira frase e o que
   # decide a retencao, e girar entre formatos serve para MEDIR: com um estilo
@@ -310,6 +300,23 @@ script:
         ouvir uma história da Bíblia?" também servem). Sem gancho de tensao,
         sem detalhe da história, sem pergunta que entregue o desfecho: e só o
         convite, puro e curto.
+    - name: "pergunta-da-dor"
+      # Pedido do dono do canal (02/10/2026): abertura mais apelativa, para
+      # atrair visualizacao, sem ferir a religiao. O exemplo dele foi "Está
+      # com medo do futuro? Veja essa história".
+      instruction: >
+        Abra com uma pergunta curta e direta sobre um medo ou uma dor que
+        quem assiste vive de verdade ("Está com medo do futuro?", "Já se
+        sentiu esquecido por todo mundo?", "Cansado de carregar tudo
+        sozinho?"), e emende dizendo que a história responde.
+        Duas travas, e as duas são a diferenca entre gancho e engano. A
+        primeira: a pergunta tem que ser RESPONDIDA pela passagem que você vai
+        contar; se a história não fala daquilo, troque a PERGUNTA, nunca a
+        história. A segunda: a pergunta não promete o que a passagem não da,
+        e não usa o sofrimento como isca ("você vai chorar", "isso vai mudar
+        a sua vida hoje", "ninguem te conta isso"). Pergunte da dor como um
+        amigo pergunta, não como um anuncio grita: o canal atrai pelo
+        reconhecimento ("e isso mesmo que eu sinto"), não pelo exagero.
     - name: "fato-chocante"
       # Pedido do dono do canal (23/09/2026): abrir com um fato concreto e
       # forte, no estilo "ele estava morto ha quatro dias". Um gancho parecido
@@ -406,11 +413,61 @@ script:
   # videos de cada 10 dias saem na proporcao 40% surpreendente, 30% personagem,
   # 20% milagre e 10% reflexão.
   # Para mudar o peso de um tipo, troque as palavras aqui: o codigo só conta.
+  # Instrucao extra colada no prompt quando a categoria da vez e esta. Serve
+  # para um horario ter FORMATO proprio, e não só tema proprio: sem isto, a
+  # categoria só trocava a lista de temas e todo video saia com a mesma forma.
+  instrucoes_por_categoria:
+    versiculo: >
+      FORMATO ESPECIAL, diferente dos outros videos do canal: este e o
+      "Versículo do dia", o video da manha. A primeira cena abre dizendo
+      exatamente "Versículo do dia" e em seguida o versículo do tema, COM AS
+      SUAS PALAVRAS e citando a referencia em voz alta ("Em Isaías 41, Deus
+      diz que segura a tua mão direita"). A PRIMEIRA PALAVRA do video e
+      "Versículo", sem nenhuma cena antes dela: quem abre com história errou o
+      formato. E versículo no singular quando for um só ("versículo 28", nunca
+      "versículos 28"). NUNCA copie o texto literal de uma
+      traducao moderna: elas são protegidas por direito autoral e a copia
+      derruba a originalidade que a monetizacao exige.
+      Depois do versículo, o video depende do que a passagem REGISTRA. Nao
+      olhe o livro, olhe o conteudo, porque livro narrativo tambem tem fala:
+
+      (A) A passagem registra um ACONTECIMENTO (alguem fez algo, algo
+      aconteceu): conte essa cena. Os personagens são os da passagem e fazem e
+      dizem SO o que ela registra.
+
+      (B) A passagem e uma FALA, uma promessa, um poema ou um ensinamento, e
+      nao registra ninguem reagindo a ela. E o caso de todo salmo e proverbio,
+      de toda carta, e TAMBEM de fala dentro de livro narrativo: Mateus 11,
+      versículo 28 e Jesus falando, e o texto nao conta o que cada pessoa fez
+      depois. Aqui NAO EXISTE cena, e inventar uma e o erro. Entao NAO narre
+      acontecimento: explique. Quem estava falando e para quem. O que cada
+      parte da frase quer dizer. O que ela promete, e o que ela NAO promete.
+      Por que foi dita assim. As imagens aqui são de lugar, objeto, luz e
+      paisagem, ou da multidao ouvindo, nunca de alguem reagindo.
+
+      PROIBIDO EM QUALQUER DOS DOIS CASOS: criar uma pessoa que a passagem nao
+      nomeia, mesmo sem nome e mesmo generica. Em tres geracoes de teste o
+      modelo criou "um carpinteiro chamado Simão" com Jesus tocando o ombro
+      dele, "um velho agricultor" que deixou a enxada e seguiu Jesus ate a
+      sombra de uma oliveira, e uma cidade tremendo com o povo correndo para o
+      templo no Salmo 46. Nada disso esta escrito. "Um agricultor qualquer"
+      inventado e tao falso quanto um com nome, e o titulo do video acaba
+      falando dele, o que espalha a invencao. Se faltar material, explique
+      mais: explicacao verdadeira enche o video melhor que cena inventada.
+      Ao ligar o versículo ao hoje, fale no PRESENTE e sobre quem esta
+      assistindo ("quem ouve isso hoje ainda carrega..."), nunca contando como
+      acontecimento passado ("muitos deixaram as sacolas e descansaram"),
+      porque no passado isso vira fato que a passagem nao registra.
+      Feche ligando o versículo ao dia de quem esta assistindo. Sem pergunta
+      no fim e sem chamar o proximo video: o fecho e a frase do versículo
+      voltando, agora com o peso do que acabou de ser contado.
+
   mistura:
-    # 06h: história surpreendente, o tipo que mais rendeu até agora
-    - ["surpreendente", "surpreendente", "surpreendente", "reflexão",
-       "surpreendente", "surpreendente", "surpreendente", "surpreendente",
-       "reflexão", "surpreendente"]
+    # 06h: Versículo do dia. Formato proprio, pedido pelo dono do canal em
+    # 02/10/2026: abre com o versículo e conta uma passagem curta que mostra
+    # ele acontecendo (ver instrucoes_por_categoria).
+    - ["versiculo", "versiculo", "versiculo", "versiculo", "versiculo",
+       "versiculo", "versiculo", "versiculo", "versiculo", "versiculo"]
     # 12h: um personagem (santo ou figura bíblica) por dia
     - ["personagem", "personagem", "personagem", "personagem", "personagem",
        "personagem", "personagem", "personagem", "personagem", "reflexão"]
@@ -423,8 +480,11 @@ script:
   # continua pulando pela lista (ver _spread_stride) para não publicar dois
   # temas vizinhos em dias seguidos.
   # Cada grupo precisa de tema suficiente para não repetir cedo: no ritmo
-  # acima, "surpreendente" sai 12 vezes a cada 10 dias, "personagem" 9,
-  # "milagre" 6 e "reflexão" 3.
+  # acima, "versiculo" sai 10 vezes a cada 10 dias (um por manha),
+  # "personagem" 9, "milagre" 6, "surpreendente" 4 e "reflexão" 1.
+  # ATENÇÃO: "surpreendente" caiu de 12 para 4 quando a manha virou Versículo
+  # do dia. Era o tipo que mais rendia; se o dado mostrar que ele era a razao
+  # do desempenho, o lugar de devolver espaco para ele e o slot da noite.
   topics:
     # História com virada, perseguicao, risco de morte ou desfecho inesperado.
     # E o grupo do horario da manha e da sobra da noite: 12 dos 30 videos.
@@ -476,6 +536,36 @@ script:
 
     # Uma pessoa no centro: santo da tradicao ou figura que encontra Jesus.
     # E o grupo do meio-dia: 9 dos 30 videos.
+    # Versículos do "Versículo do dia", o video da manha. Cada um traz a DOR
+    # que ele atende, depois do travessao: e isso que faz a abertura falar com
+    # quem está assistindo em vez de recitar. O versículo e dito com as
+    # palavras do canal, nunca copiado de traducao moderna (direito autoral e
+    # originalidade exigida pela monetizacao).
+    versiculo:
+      - "Isaías 41, versículo 10 — não temas, eu seguro a tua mão direita: para quem está com medo do futuro"
+      - "Salmo 23, versículo 1 — o Senhor é o meu pastor: para quem se sente sem direcao"
+      - "Salmo 46, versículo 1 — Deus é refugio e forca: para quem está passando por aperto"
+      - "Salmo 91, versículo 1 — quem habita no abrigo do Altissimo: para quem está com medo de perder alguem"
+      - "Mateus 11, versículo 28 — vinde a mim os que estão cansados: para quem está exausto de carregar tudo"
+      - "Mateus 6, versículo 34 — não se preocupe com o amanha: para quem perde o sono pensando no mes que vem"
+      - "João 14, versículo 27 — deixo-vos a paz: para quem está com o coracao agitado"
+      - "Filipenses 4, versículo 13 — posso todas as coisas naquele que me fortalece: para quem acha que não vai dar conta"
+      - "Filipenses 4, versículos 6 e 7 — não andeis ansiosos por nada: para quem convive com ansiedade"
+      - "Romanos 8, versículo 28 — todas as coisas cooperam para o bem: para quem não entende o que está vivendo"
+      - "Romanos 8, versículos 38 e 39 — nada nos separa do amor de Deus: para quem se sente indigno"
+      - "Josué 1, versículo 9 — sê forte e corajoso: para quem precisa tomar uma decisao dificil"
+      - "Jeremias 29, versículo 11 — eu sei os planos que tenho para voce: para quem sente que a vida travou"
+      - "Provérbios 3, versículos 5 e 6 — confia de todo o coracao e não na tua propria esperteza: para quem quer controlar tudo"
+      - "Salmo 34, versículo 18 — perto está o Senhor dos que têm o coracao quebrado: para quem está de luto"
+      - "2 Timóteo 1, versículo 7 — Deus não deu espirito de medo: para quem vive com medo do que vem"
+      - "Hebreus 11, versículo 1 — a fe e a certeza do que não se ve: para quem está esperando resposta"
+      - "Lamentações 3, versículos 22 e 23 — a misericordia se renova cada manha: para quem acha que estragou tudo"
+      - "Salmo 121, versículos 1 e 2 — de onde vem o meu socorro: para quem não tem a quem pedir ajuda"
+      - "Mateus 5, versículo 4 — bem-aventurados os que choram, porque serão consolados: para quem está chorando hoje"
+      - "Isaías 40, versículo 31 — os que esperam no Senhor renovam as forcas: para quem está no limite"
+      - "1 Pedro 5, versículo 7 — lance sobre ele toda a sua ansiedade: para quem carrega preocupacao sozinho"
+      - "Salmo 37, versículo 5 — entrega o teu caminho ao Senhor: para quem não sabe que passo dar"
+      - "1 Coríntios 13, versículos 4 a 7 — o amor e paciente: para quem está brigado com alguem de casa"
     personagem:
       # --- Jesus: encontros ---
       - "Zaqueu subindo na arvore para ver de longe"
@@ -487,26 +577,25 @@ script:
       - "Mateus, o cobrador de impostos, chamado da mesa"
       - "A viuva de Naim e o filho único no caminho do enterro"
       # --- Santos e tradicao catolica ---
-      - "São Francisco de Assis renunciando a riqueza do pai"
+      - "São Francisco devolvendo as roupas ao pai na praca de Assis"
       - "São Francisco e o lobo de Gubbio"
-      - "Santa Clara deixando tudo para seguir Francisco"
+      - "Santa Clara fugindo de casa na noite de Domingo de Ramos"
       - "Santo Antonio e o sermao aos peixes"
-      - "São Jose, o pai que confiou sem entender"
+      - "São Jose e o sonho que o fez fugir para o Egito de madrugada"
       - "Nossa Senhora de Fatima e os três pastorinhos"
       - "Nossa Senhora de Lourdes e a menina Bernadette"
       - "Nossa Senhora Aparecida encontrada no rio Paraiba"
       - "Nossa Senhora de Guadalupe e as rosas no manto de Juan Diego"
-      - "Santa Teresinha e o caminho das coisas pequenas"
-      - "Santa Rita de Cassia e o perdao impossivel"
-      - "São Judas Tadeu, o santo das causas perdidas"
-      - "São Sebastiao amarrado e fiel"
+      - "Santa Teresinha pedindo ao Papa para entrar no convento aos quinze anos"
+      - "Santa Rita e o espinho que ficou na testa dela"
+      - "São Sebastiao e as flechas que nao o mataram"
       - "Padre Pio e as marcas nas mãos"
-      - "Madre Teresa nas ruas de Calcuta"
+      - "Madre Teresa e o chamado que ela ouviu no trem para Darjeeling"
       - "Santo Agostinho e a conversao no jardim"
-      - "São Paulo, de perseguidor a apostolo"
-      - "São Pedro, o pescador que virou pedra"
-      - "Frei Galvao, o primeiro santo brasileiro"
-      - "Santa Dulce dos Pobres e o hospital que nasceu de nada"
+      - "São Paulo cego no chao da estrada de Damasco"
+      - "Pedro negando Jesus tres vezes antes do galo cantar"
+      - "Frei Galvao e as pilulas de papel com a oracao escrita a mao"
+      - "Santa Dulce e o galinheiro que virou hospital"
 
     # Cura, ressurreicao e intervencao sobrenatural: a "grande revelacao"
     # da noite. 6 dos 30 videos.
