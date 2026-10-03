@@ -131,39 +131,8 @@ EOF
 
 ## Defeitos medidos e ainda não corrigidos
 
-Não são hipóteses: foram contados em execuções reais. Ficam aqui porque mexer
-em roteiro durante o experimento do gancho faria as mudanças se confundirem, e
-porque a correção de um deles precisa de decisão do dono do canal.
-
-### O prompt tem regras "NUNCA" que são quebradas em 1 de cada 3 vídeos
-
-Medido em 2026-10-01 sobre as 34 execuções com narração em disco:
-
-| defeito | execuções | o que a regra diz |
-|---|---|---|
-| a última frase é pergunta | 9 (26%) | "A ultima frase NUNCA e pergunta" (`src/script_gen.py:139`) |
-| chama o próximo vídeo | 4 (12%) | "nunca e formula vaga do tipo 'qual sera o...'" |
-| o TEXTO da instrução vazou para a narração | 2 (6%) | — |
-
-11 das 34 (32%) têm pelo menos um. Dois exemplos do vazamento, que são os mais
-graves porque o espectador OUVE a instrução:
-
-- `lote_2026-09-26_2`: "...aceitou o presente, **deixando o silêncio
-  perguntar**: qual será a próxima prova de fé?"
-- `lote_2026-09-25_2`: "...encontraram uma família que abraçava o sofrimento e
-  esperança, **deixando a pergunta no ar**." seguido de "**A próxima história
-  revelará outro milagre inesperado.**"
-
-A instrução no prompt é "Termine deixando uma pergunta no ar, SEM FAZER a
-pergunta", e o modelo escreveu a própria instrução dentro da história. Os dois
-foram publicados.
-
-**Por que isto é corrigível sem pedir evidência nova:** a regra já existe e já
-foi decidida; o que falta é alguém conferir se ela foi cumprida. O projeto já
-tem o padrão pronto para isso (`texto_corrompido()`, que recusa o roteiro e
-gasta uma das `JSON_ATTEMPTS`), então o conserto é um validador que rejeita
-roteiro cuja última frase termine em "?" ou que case com o padrão de teaser e
-de vazamento. Custo: às vezes uma chamada extra na Groq.
+Não são hipóteses: foram contados em execuções reais. Ficam aqui porque a
+correção depende de decisão do dono do canal, não de mais medição.
 
 ### Histórias de santo ganham episódio inventado
 
@@ -191,10 +160,60 @@ tema já afirma; tirar santo não-bíblico da rotação (28 temas de `personagem
 das publicações); ou trocar o modelo para essas histórias. Decisão do dono do
 canal, não da skill.
 
-**Como remedir os dois:** o script está em `scripts/` quando existir; por
-enquanto, contar a última frase de cada `metadata.json` em `output/*/`.
+**Como remedir:** cruzar o campo `tema` de cada `metadata.json` com a lista
+`script.topics.personagem` do `config.yaml` e ler a narração dos que são de
+santo. Não há como automatizar o julgamento: alguém precisa saber o que a
+tradição registra.
 
 ## Experimentos concluídos
+
+### 2026-10-02 validador do fecho
+
+Autorizado pelo dono depois de ver a medição.
+
+**O defeito:** o prompt tinha regras "NUNCA" que o modelo ignorava, e nada
+conferia. Medido sobre as 34 execuções com narração em disco:
+
+| regra quebrada | execuções | onde a regra está |
+|---|---|---|
+| a última frase é pergunta | 9 (26%) | `src/script_gen.py`, regra 4 da abertura |
+| chama o próximo vídeo | 4 (12%) | "nunca é fórmula vaga do tipo 'qual será o...'" |
+| o TEXTO da instrução vazou para a narração | 2 (6%) | — |
+
+11 das 34 (32%) com pelo menos uma. As duas do vazamento são as piores porque
+o espectador **ouve a instrução**, e as duas foram publicadas:
+"...aceitou o presente, **deixando o silêncio perguntar**: qual será a próxima
+prova de fé?", quando a instrução diz "Termine deixando uma pergunta no ar,
+SEM FAZER a pergunta".
+
+**Por que não precisou de evidência nova:** a regra já era decisão do dono. O
+que faltava era conferir se foi cumprida. Regra escrita e regra conferida são
+coisas diferentes, e só a segunda vale.
+
+**A mudança:** `regras_do_fecho_quebradas()` entra no laço de retentativa de
+`generate_scene_script`, no mesmo formato dos quatro validadores que já
+existiam (`hook_entrega_fim`, `cliche_na_narracao`, `warn_distant_words`,
+`texto_corrompido`). Roteiro com o fecho errado é recusado e o modelo é
+chamado de novo, até 3 vezes.
+
+Três decisões que valem registro:
+
+1. **Não trava a publicação.** Esgotadas as tentativas, segue com um AVISO no
+   log. Fechar com pergunta é defeito de estilo; não publicar nada naquele
+   horário é pior.
+2. **Entre dois roteiros acima do mínimo de palavras, fica o de fecho limpo.**
+   Antes a escolha era só por número de palavras, e isso publicaria o defeito
+   por causa de 150 palavras a mais. Abaixo do mínimo continua vencendo o mais
+   comprido, porque aí o risco é a monetização.
+3. **Os padrões moram em `src/script_gen.py`**, e `scripts/conferir_roteiros.py`
+   importa de lá. Duplicar criaria duas versões da mesma regra em arquivos
+   diferentes, que é exatamente o bug das duas constantes de volume.
+
+**Verificado:** reconhece os três defeitos nas frases reais que saíram
+publicadas; recusa e devolve o roteiro limpo na segunda tentativa; com todas as
+tentativas quebradas, segue avisando em vez de travar; e escolhe o fecho limpo
+com 157 palavras em vez do quebrado com 306. O medidor dá os mesmos números de
+antes (9/4/2), então o refactor não mudou a definição da regra.
 
 ### 2026-10-02 nível de entrega e ganhos medidos
 

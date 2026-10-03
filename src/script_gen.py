@@ -786,6 +786,59 @@ def hook_entrega_fim(primeira_cena: str) -> str | None:
     return achado.group(0) if achado else None
 
 
+# As regras "NUNCA" do fecho, conferidas no roteiro que o modelo devolveu.
+#
+# POR QUE ISTO EXISTE: estas regras ja estavam no prompt e eram ignoradas.
+# Medido em 02/10/2026 sobre as 34 execucoes com narracao em disco, 11 (32%)
+# quebravam pelo menos uma: 9 fechavam com pergunta, 4 chamavam o proximo video
+# e 2 escreveram o TEXTO DA INSTRUCAO dentro da historia ("deixando a pergunta
+# no ar"), que o espectador ouve. Duas dessas foram publicadas.
+#
+# Regra escrita e regra conferida sao coisas diferentes, e so a segunda vale.
+
+# "chamar o proximo video" troca o fim da historia por anuncio, e em formato
+# curto o fecho e o que decide se a pessoa volta
+_TEASER_RE = re.compile(
+    r"pr[oó]xim[ao]\s+(hist[oó]ria|cap[ií]tulo|v[ií]deo)"
+    r"|qual\s+ser[aá]\s+a\s+pr[oó]xim"
+    r"|descubra\s+no\s+pr[oó]xim",
+    re.IGNORECASE,
+)
+
+# o pior dos tres: o modelo escreve a instrucao em vez de cumprir ela
+_INSTRUCAO_VAZADA_RE = re.compile(
+    r"deixando\s+(a|uma)\s+pergunta\s+no\s+ar"
+    r"|deixando\s+o\s+sil[eê]ncio\s+perguntar"
+    r"|sem\s+fazer\s+a\s+pergunta",
+    re.IGNORECASE,
+)
+
+
+def regras_do_fecho_quebradas(cenas: list[dict]) -> list[str]:
+    """Quais regras "NUNCA" do fecho este roteiro quebrou.
+
+    Devolve lista vazia quando esta tudo certo. Usada no laco de retentativa de
+    generate_scene_script e tambem por scripts/conferir_roteiros.py, que mede
+    os roteiros antigos: as duas coisas leem a MESMA definicao de propósito,
+    porque regra duplicada em dois arquivos e como as duas constantes de volume
+    que ninguem conferia.
+    """
+    narracoes = [c.get("narration", "") for c in cenas if c.get("narration")]
+    if not narracoes:
+        return []
+
+    quebradas = []
+    if narracoes[-1].rstrip().endswith("?"):
+        quebradas.append("a ultima frase e pergunta")
+
+    inteiro = " ".join(narracoes)
+    if _TEASER_RE.search(inteiro):
+        quebradas.append("chama o proximo video")
+    if _INSTRUCAO_VAZADA_RE.search(inteiro):
+        quebradas.append("o texto da instrucao vazou para a narracao")
+    return quebradas
+
+
 def scene_mood(script: dict) -> str:
     """Clima da historia (ver CLIMAS), normalizado; "calmo" se o modelo nao
     mandar um valor valido no campo "clima"."""
@@ -825,11 +878,27 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
         cliche = cliche_na_narracao(data["scenes"])
         distantes = warn_distant_words(data["scenes"])
         corrompido = texto_corrompido(data)
+        fecho = regras_do_fecho_quebradas(data["scenes"])
         if (word_count >= min_words and not entrega and not cliche and not distantes
-                and not corrompido):
+                and not corrompido and not fecho):
             return data
 
-        if best is None or word_count > scene_word_count(best):
+        # Qual roteiro guardar para o caso de todas as tentativas falharem.
+        # Entre dois que ja passam do minimo de palavras, fica o de fecho
+        # limpo: palavra a mais nao compensa fechar com pergunta ou com
+        # chamada do proximo video. Abaixo do minimo vale o mais comprido, que
+        # e a regra de antes, porque ai o risco e a monetizacao.
+        def melhor_que(novo: dict, atual: dict | None) -> bool:
+            if atual is None:
+                return True
+            n_pal, a_pal = scene_word_count(novo), scene_word_count(atual)
+            n_ok = n_pal >= min_words and not regras_do_fecho_quebradas(novo["scenes"])
+            a_ok = a_pal >= min_words and not regras_do_fecho_quebradas(atual["scenes"])
+            if n_ok != a_ok:
+                return n_ok
+            return n_pal > a_pal
+
+        if melhor_que(data, best):
             best = data
         if corrompido:
             print(f"  [script] o modelo devolveu um caractere quebrado no texto. "
@@ -843,12 +912,23 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
         elif distantes:
             print(f"  [script] linguagem distante na narracao ({', '.join(distantes)}). "
                   f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
+        elif fecho:
+            print(f"  [script] regra do fecho quebrada ({'; '.join(fecho)}). "
+                  f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
         else:
             print(f"  [script] narracao com {word_count} palavras (minimo {min_words}). "
                   f"Tentativa {attempt}/{MAX_ATTEMPTS}.")
 
-    print(f"  [script] AVISO: seguindo com {scene_word_count(best)} palavras. "
-          f"O video pode ficar abaixo de 1 minuto e nao se qualificar para monetizacao.")
+    if scene_word_count(best) < min_words:
+        print(f"  [script] AVISO: seguindo com {scene_word_count(best)} palavras "
+              f"(minimo {min_words}). O video pode ficar abaixo de 1 minuto e nao "
+              f"se qualificar para monetizacao.")
+    # defeito que sobrou tem que aparecer no log: seguir calado foi exatamente
+    # o que deixou 11 roteiros saírem com o fecho errado sem ninguem saber
+    fecho_final = regras_do_fecho_quebradas(best["scenes"])
+    if fecho_final:
+        print(f"  [script] AVISO: seguindo com o fecho quebrado "
+              f"({'; '.join(fecho_final)}) depois de {MAX_ATTEMPTS} tentativas.")
     return best
 
 
