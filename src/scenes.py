@@ -73,7 +73,26 @@ PAUSE_KEEP = 0.30         # tamanho que a pausa passa a ter
 # disso soa como a voz sendo cortada (visto na pratica com o Kokoro, mais
 # ruidoso que o edge-tts nos trechos quietos): antes de cortar, confere o pico
 # so no pedaco que seria removido, nao a janela inteira.
-PEAK_SAFETY = 1.3         # pico acima disto x SILENCE_LEVEL cancela o corte
+#
+# O LIMIAR E ABSOLUTO, e de proposito. A versao anterior era SILENCE_LEVEL x 1.3
+# (0,0130) e deixava passar o que o dono do canal relatou quatro vezes como
+# "chiado no comeco do video". Medido em 08/10/2026, num video real: a pausa
+# cortada tinha pico 0,00772 e RMS -54,7 dB, ou seja NAO era silencio, era o
+# ruido do Kokoro, e cortar+emendar ali e audivel.
+#
+# Nao da para resolver isso afinando o fator, porque o Kokoro NAO PRODUZ
+# silencio: medindo a janela de 100ms mais quieta das 8 cenas daquele video, o
+# piso dele vai de 0,00592 a 0,01538 (mediana 0,00847, -41,4 dB), praticamente
+# em cima do proprio SILENCE_LEVEL. Qualquer limiar que permita cortar algo no
+# Kokoro corta ruido audivel, mais ainda depois da normalizacao para -16 LUFS,
+# que soma quase 10 dB.
+#
+# Entao a pergunta passa a ser "o que vou remover e INAUDIVEL?". 0,002 (-54 dB)
+# vira -44 dB depois da normalizacao, que nao se ouve por baixo da fala. Com o
+# Kokoro isso cancela todo corte, que e o resultado certo: nao ha silencio para
+# remover. Com o edge-tts, que entrega silencio digital de verdade nas pausas, o
+# corte continua acontecendo como antes.
+NIVEL_INAUDIVEL = 0.002   # pico acima disto no pedaco a remover cancela o corte
 CUT_FADE = 0.008          # fade de 8ms nas duas bordas de cada corte, contra clique
 KEEP_HEAD = 0.05          # sobra no comeco, para a fala nao entrar cortada
 KEEP_TAIL = 0.12          # sobra no fim, para a ultima silaba nao ser cortada
@@ -183,7 +202,7 @@ def compress_pauses(path: str, timings: list[dict]) -> tuple[str, list[dict]]:
             continue
         corte_inicio = inicio + (duracao - sobra) / 2
         pedaco = amostras[int(corte_inicio * ANALYSIS_RATE):int((corte_inicio + sobra) * ANALYSIS_RATE)]
-        if len(pedaco) and np.abs(pedaco).max() > SILENCE_LEVEL * PEAK_SAFETY:
+        if len(pedaco) and np.abs(pedaco).max() > NIVEL_INAUDIVEL:
             continue
         cortes.append((corte_inicio, sobra))
     if not cortes:
