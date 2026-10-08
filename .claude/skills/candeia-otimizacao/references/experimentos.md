@@ -131,6 +131,49 @@ EOF
 
 ## Experimentos concluídos
 
+### 2026-10-08 o chiado era o corte de pausa do Kokoro
+
+Relatado quatro vezes pelo dono do canal, e as três primeiras tentativas de
+diagnóstico erraram. O relato que resolveu foi o mais específico: "um barulho
+estranho **a partir do 'está em'**", no começo do vídeo, voltando ao normal
+depois.
+
+**A causa:** `compress_pauses` em `src/scenes.py` encurta pausas internas.
+Numa pausa de 400 ms em 5,340s ele removeu 100 ms e emendou. Esse pedaço **não
+era silêncio**: pico 0,00772, RMS −54,7 dB. Era o ruído do Kokoro. A trava
+existia (`PEAK_SAFETY`, cancelava acima de 0,0130) e estava folgada demais.
+
+**Por que não bastava afinar o fator:** o Kokoro **não produz silêncio**.
+Medindo a janela de 100 ms mais quieta das 8 cenas de um vídeo real, o piso vai
+de 0,00592 a 0,01538 (mediana 0,00847, −41,4 dB), praticamente em cima do
+próprio `SILENCE_LEVEL`. Qualquer limiar que permita cortar algo no Kokoro corta
+ruído audível — mais ainda depois da normalização para −16 LUFS, que soma quase
+10 dB e foi o que tirou esse defeito da inaudibilidade.
+
+**A mudança:** o limiar passa a ser absoluto e a pergunta passa a ser "o que vou
+remover é inaudível?". `NIVEL_INAUDIVEL = 0.002` (−54 dB, que vira −44 dB depois
+da normalização). Com Kokoro cancela todo corte, que é o resultado certo; com
+edge-tts, que entrega silêncio digital, o corte continua.
+
+**Verificado:** 0 de 8 cenas cortadas com Kokoro, e 500 ms ainda cortados num
+arquivo com silêncio digital de verdade. A narração usada passa a ser o mesmo
+arquivo que o dono confirmou de ouvido estar limpo.
+
+**As três hipóteses erradas, para não repetir:**
+
+| hipótese | como caiu |
+|---|---|
+| aliasing na reamostragem (8–11,5 kHz destruída, 16–22 kHz criada) | **erro meu de medição**: li arquivo estéreo como mono, e intercalar L,R fabrica essa imagem espelhada. Refeito com canais separados, o reamostrador está limpo |
+| sibilância da voz amplificada | de-esser com 3,8 dB de redução não mudou nada para o ouvido do dono |
+| brilho da trilha e do efeito de água acima de 12 kHz | corte íngreme de 19 a 28 dB naquela faixa não mudou nada |
+
+As três caíram pelo mesmo motivo: eu media uma banda e concluía sobre o que a
+pessoa ouve. O que funcionou foi **isolar por eliminação** — mandar a voz
+sozinha, nas duas versões, e perguntar qual tem o barulho.
+
+**Lição para a próxima:** o dono dizer *onde* ("a partir do está em") valeu mais
+que todas as minhas medições de espectro. Pedir o instante primeiro.
+
 ### 2026-10-03 formato por horário, e o fim da invenção em história de santo
 
 Pedido do dono do canal, em três partes: arrumar a invenção nas histórias de
