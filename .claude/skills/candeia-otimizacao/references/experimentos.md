@@ -131,6 +131,92 @@ EOF
 
 ## Experimentos concluídos
 
+### 2026-10-08 a publicacao da manha nunca saiu, e a da noite saia dobrada
+
+Achado ao analisar o canal, e **não era questão de conteúdo**: era defeito de
+agendamento, invisível no código e visível no canal.
+
+**O que o canal mostra**, no feed público de 03/10 a 08/10: nenhum vídeo às 06h
+de Brasília em seis dias — ou seja, o formato "Versículo do dia", que entrou em
+produção em 03/10, **nunca foi publicado**. E dois vídeos às 20h em vários
+dias, com temas quase iguais: dois sobre Jairo em 06/10, dois sobre a
+tempestade em 05/10, dois sobre os pastores em 08/10.
+
+**A causa:** `script_gen.current_slot` deduzia qual das três publicações estava
+rodando pelo **horário mais próximo no relógio**. Isso funciona com cron
+pontual, e o cron do GitHub não é. Horários reais de início das execuções,
+tirados do `gh run list`: **01:23, 15:07 e 19:32 UTC**. Passando pelo
+`current_slot` com `posting_hours_utc [9, 15, 23]`, as três execuções do dia
+viravam slot 2, slot 1 e **slot 2 de novo**.
+
+**A mudança, em `.github/workflows/daily-post.yml`:**
+
+1. o slot passa a vir do **cron** (`github.event.schedule`), que é confiável por
+   atrasada que a execução esteja; `main.py` já respeitava `SLOT_ALVO`, então
+   foi só preencher. Cron fora do mapa falha a execução de propósito, em vez de
+   publicar no slot errado em silêncio;
+2. os cron saem de 1 hora para **6 horas** antes de cada publicação, porque os
+   atrasos medidos chegaram a 7h e com 1h de folga a execução passava da hora
+   marcada no `publishAt`;
+3. em `workflow_dispatch` o slot continua vindo do relógio, que é o certo para
+   execução disparada na mão.
+
+**Verificado:** o YAML parseia, o mapa cobre os três cron e falha em cron
+desconhecido, e `SLOT_ALVO=0` produz a categoria `versiculo` com o formato
+próprio no horário de 9h UTC.
+
+**Efeito colateral do defeito, que vale olhar depois:** os vídeos duplicados
+tiveram 4, 11 e 24 views, enquanto os de slot único no mesmo período tiveram
+248 e 489. Publicar dois vídeos quase iguais no mesmo minuto parece afundar os
+dois. É só uma observação com n pequeno, não um resultado — mas é um motivo a
+mais para a correção.
+
+### 2026-10-08 linha de base nº 2: a coorte nova rende um pouco menos
+
+**Comparação honesta, com a ressalva na frente:** os vídeos publicados de 03/10
+em diante carregam QUATRO mudanças ao mesmo tempo (áudio normalizado, formato
+da manhã, gancho único, temas de santo reescritos) **e** o defeito de
+agendamento acima. Nada aqui separa o efeito de cada parte.
+
+| coorte | vídeos | views | % assistido (ponderado) | segundos médios |
+|---|---|---|---|---|
+| estreias até 02/10 | 39 | 6.101 | **73,0%** | 32 |
+| estreias de 03/10 a 08/10 | 9 | 1.049 | **68,0%** | 30 |
+
+Puxado da Analytics API por vídeo (`dimensions=video`), em duas janelas, e
+cruzado com o feed público do canal para separar estreia de vídeo antigo
+redescoberto — um dos dez candidatos (`qIRIilApvIg`) era antigo e saiu da conta.
+
+**Leitura:** 5 pontos abaixo, e no sentido oposto ao esperado. Com 9 vídeos,
+quatro mudanças somadas e um terço das publicações faltando ou duplicadas,
+isso **não condena** nenhuma das mudanças. O passo certo é corrigir o
+agendamento, deixar rodar com as três publicações saindo de verdade, e medir de
+novo com a coorte limpa.
+
+**Critério, escrito antes:** se depois de 10 dias com o agendamento correto a
+coorte continuar 5 pontos ou mais abaixo dos 73,0%, aí sim alguma das mudanças
+de 02 e 03/10 é suspeita, e o jeito de descobrir qual é desfazê-las uma por vez,
+começando pelo gancho único.
+
+### A coleta nao ve os videos que o bot publica
+
+Defeito de ferramenta, achado na mesma análise. `src/analytics.py` monta a
+lista a partir de `output/*/publicacao.json` **local**, mas a produção roda no
+GitHub Actions: as pastas ficam no runner e somem. Resultado: a API conhece 39
+vídeos e só 14 estão ligados ao roteiro que os produziu, e todos os 14 são de
+geração local.
+
+**Consequência:** o canal **não consegue responder** "qual gancho, qual formato,
+qual arco rende mais", porque a metade que o bot publicou sozinho não tem
+`metadata.json` por perto. Toda a análise por gancho da linha de base de 01/10
+vale só para os vídeos gerados na mão.
+
+**Como resolver, quando for a vez:** o workflow já sobe o vídeo como artifact;
+subir o `metadata.json` junto e guardar o par (id do vídeo, roteiro) num arquivo
+versionado — ou gravar o roteiro na descrição do vídeo, de onde a API consegue
+ler de volta. Não implementado: é mudança de ferramenta, não de defeito em
+produção, e o agendamento vem primeiro.
+
 ### 2026-10-08 o chiado era o corte de pausa do Kokoro
 
 Relatado quatro vezes pelo dono do canal, e as três primeiras tentativas de
