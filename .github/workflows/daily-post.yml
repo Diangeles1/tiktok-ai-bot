@@ -6,12 +6,17 @@ on:
     # horarios em que o publico costuma estar ativo. Precisa casar com
     # posting_hours_utc no config.yaml: e de la que o bot deduz qual publicacao
     # esta rodando, para cada uma pegar um tema diferente.
-    # uma hora ANTES de cada publicacao: o GitHub atrasa o inicio (de minutos
-    # a horas) e o video sobe com a hora exata marcada no YouTube (publishAt),
-    # entao o atraso do agendador nao atrasa mais a publicacao
-    - cron: "0 8 * * *"    # gera para as 06h de Brasilia (devocional da manha)
-    - cron: "0 14 * * *"   # gera para as 12h de Brasilia (horario de almoco)
-    - cron: "0 22 * * *"   # gera para as 20h de Brasilia (noite)
+    # SEIS horas antes de cada publicacao, e nao uma. Medido em 08/10/2026 nas
+    # execucoes reais: o GitHub atrasou o inicio em 1h, 3h e ate 7h, e com uma
+    # hora de folga a execucao passava da hora marcada. Com seis horas ela
+    # chega em tempo de o YouTube cumprir o publishAt.
+    #
+    # A folga grande SO e segura porque o slot agora vem do cron (ver o passo
+    # "Descobrir qual publicacao e esta"): antes o bot deduzia a publicacao
+    # pelo relogio, e execucao atrasada era interpretada como outra publicacao.
+    - cron: "0 3 * * *"    # gera para as 06h de Brasilia (devocional da manha)
+    - cron: "0 9 * * *"    # gera para as 12h de Brasilia (horario de almoco)
+    - cron: "0 17 * * *"   # gera para as 20h de Brasilia (noite)
   workflow_dispatch:
     inputs:
       dry_run:
@@ -40,6 +45,43 @@ jobs:
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
+
+      # O BOT NAO PODE MAIS DEDUZIR A PUBLICACAO PELO RELOGIO.
+      #
+      # script_gen.current_slot escolhia o horario de posting_hours_utc mais
+      # proximo da hora atual. Isso funciona quando o cron e pontual, e o cron
+      # do GitHub nao e. Medido em 08/10/2026, nos horarios reais de inicio das
+      # execucoes: 01:23, 15:07 e 19:32 UTC. Passando isso pelo current_slot
+      # com posting_hours_utc [9, 15, 23], as tres execucoes do dia viravam
+      # slot 2, slot 1 e slot 2 DE NOVO.
+      #
+      # Consequencia, visivel no canal de 03/10 a 08/10: a publicacao da manha
+      # NUNCA saiu (nenhum video as 06h de Brasilia em seis dias, incluindo o
+      # formato "Versiculo do dia" que entrou em producao em 03/10), e saiam
+      # DOIS videos na noite, com temas quase iguais disputando audiencia
+      # entre si (dois sobre Jairo em 06/10, dois sobre a tempestade em 05/10,
+      # dois sobre os pastores em 08/10).
+      #
+      # O cron, ao contrario do relogio, e confiavel: ele diz qual das tres
+      # publicacoes esta rodando, por atrasada que a execucao esteja. main.py
+      # ja respeita SLOT_ALVO (ver _alvo), entao basta preencher.
+      #
+      # Em workflow_dispatch nao existe schedule: fica vazio e o bot cai no
+      # relogio, que e o certo para execucao disparada na mao.
+      - name: Descobrir qual publicacao e esta
+        if: github.event_name == 'schedule'
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 3 * * *")  echo "SLOT_ALVO=0" >> "$GITHUB_ENV" ;;
+            "0 9 * * *")  echo "SLOT_ALVO=1" >> "$GITHUB_ENV" ;;
+            "0 17 * * *") echo "SLOT_ALVO=2" >> "$GITHUB_ENV" ;;
+            *)
+              echo "cron '${{ github.event.schedule }}' nao esta no mapa de slots." >&2
+              echo "Se o horario do cron mudou, atualize este passo junto." >&2
+              exit 1
+              ;;
+          esac
+          echo "publicacao desta execucao: slot $(grep SLOT_ALVO "$GITHUB_ENV" | tail -1)"
 
       - name: Rodar pipeline
         env:
