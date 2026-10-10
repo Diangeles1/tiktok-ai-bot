@@ -41,7 +41,8 @@ def upload_short(client_id: str, client_secret: str, refresh_token: str,
                   made_for_kids: bool = False,
                   thumbnail_path: str | None = None,
                   publish_at: str | None = None,
-                  synthetic: bool = True) -> dict:
+                  synthetic: bool = True,
+                  marcar_shorts: bool = True) -> dict:
     """Envia o video como YouTube Short. Retorna o recurso 'video' criado.
 
     `synthetic` declara conteudo alterado ou sintetico (imagem e narracao de IA).
@@ -57,7 +58,12 @@ def upload_short(client_id: str, client_secret: str, refresh_token: str,
 
     # titulo tem limite de 100 caracteres na API do YouTube
     title = title[:100]
-    if "#shorts" not in description.lower():
+    # A marca so entra em video que E Short. O YouTube define Short como ate 3
+    # minutos (documentacao oficial, conferida em 09/10/2026) e em tela
+    # vertical; o canal passou a ter tambem um formato longo em 16:9, e marcar
+    # aquele video como Short seria rotular errado o proprio conteudo, numa
+    # conta que depende de classificacao certa para monetizar.
+    if marcar_shorts and "#shorts" not in description.lower():
         description = f"{description}\n\n#Shorts"
 
     body = {

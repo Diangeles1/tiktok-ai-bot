@@ -1,0 +1,89 @@
+name: Video longo semanal (5 min, 16:9)
+
+# O segundo produto do canal: um video de cinco minutos em 16:9, uma vez por
+# semana, ao lado dos tres Shorts diarios. Nao e um Short esticado (o YouTube
+# define Short como ate 3 minutos), entao ele vive de busca e sugeridos.
+#
+# POR QUE UM WORKFLOW SEPARADO, e nao mais um cron no daily-post:
+#
+# 1. CUSTO DE IMAGEM. Cada imagem custa de 250 a 420 neuronios na Cloudflare e
+#    a cota gratuita e de 10.000 por dia. As ~20 imagens deste video sao 50 a
+#    84% da cota, e os tres Shorts do dia levam quase todo o resto. Por isso o
+#    daily-post PULA o dia do video longo (ver o passo "Hoje e dia de video
+#    longo?" la), e por isso este roda semanal.
+# 2. TEMPO. Medido: o render leva cerca de 3 minutos por 48 segundos de video,
+#    entao cinco minutos dao ~20 minutos de render, mais a geracao das imagens.
+#    Os 45 minutos de timeout do diario nao bastam.
+# 3. O formato vem do ambiente (FORMATO=longo), que aplica a sobreposicao do
+#    bloco "formatos" no config.yaml. Um config so, dois produtos.
+
+on:
+  schedule:
+    # Domingo. Seis horas antes da publicacao das 21 UTC (18h de Brasilia),
+    # pela mesma razao do diario: o cron do GitHub atrasa de minutos a horas, e
+    # o video sobe com a hora exata marcada no YouTube.
+    - cron: "0 15 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Se true, gera o video mas nao publica em nenhuma plataforma"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  gerar-video-longo:
+    runs-on: ubuntu-latest
+    # cinco minutos de video renderizam em ~20 min, e a geracao de 20 imagens
+    # com retentativa pode levar outros 20. 120 deixa margem para o dia em que
+    # a Cloudflare estiver lenta, sem chegar perto do teto de 6h do Actions.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Rodar pipeline no formato longo
+        env:
+          PYTHONUNBUFFERED: "1"
+          # e isto que troca o video para 16:9, a fase para "longo" e o roteiro
+          # para a geracao em duas partes (ver load_config em main.py)
+          FORMATO: longo
+          # o formato longo tem um horario so, entao a publicacao e sempre a
+          # primeira: sem isto o bot deduziria pelo relogio, que foi o defeito
+          # corrigido no diario em 09/10/2026
+          SLOT_ALVO: "0"
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: python main.py
+
+      - name: Upload video gerado (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-longo
+          path: |
+            output/**/final.mp4
+            output/**/metadata.json
+          if-no-files-found: ignore
+          retention-days: 7
