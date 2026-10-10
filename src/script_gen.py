@@ -43,6 +43,10 @@ CLIMAS = ("tenso", "triunfante", "calmo")
 # Troque para None se mudar para um modelo que nao aceite este parametro.
 REASONING_EFFORT = "low"
 MAX_COMPLETION_TOKENS = 8000
+# teto de tokens por minuto do plano gratuito da Groq, contando prompt +
+# resposta; a margem evita passar raspando na estimativa de token
+TPM_GRATUITO = 8000
+MARGEM_TPM = 400
 
 PROMPT_TEMPLATE = """Voce e um roteirista de esquetes curtas de humor para TikTok/YouTube Shorts,
 estreladas por um personagem fixo chamado "{character_name}".
@@ -366,29 +370,32 @@ def _rate_limit_wait(exc: Exception, attempt: int) -> float:
     return min(60.0, backoff)
 
 
-def _orcamento_de_resposta(max_words: int | None) -> int:
-    """Quantos tokens reservar para a resposta, pelo tamanho do roteiro pedido.
+def _orcamento_de_resposta(prompt: str) -> int:
+    """Quantos tokens reservar para a resposta, a partir do PROMPT.
 
-    POR QUE NAO O VALOR FIXO: a Groq gratuita tem teto de 8.000 TOKENS POR
-    MINUTO, e ela conta o prompt MAIS o max_tokens reservado. Com
-    max_tokens=8000 fixo, qualquer prompt um pouco maior estoura o teto antes
-    de sair do lugar. Aconteceu em 09/10/2026 ao montar o roteiro longo em
-    partes, que tem prompt maior por carregar o contexto da parte anterior:
-    "Limit 8000, Requested 8898".
+    O limite da Groq gratuita e de 8.000 TOKENS POR MINUTO contando prompt MAIS
+    max_tokens reservado, entao o orcamento depende do tamanho do prompt e so
+    pode ser calculado aqui, onde ele existe.
 
-    Reservar o que a resposta precisa resolve dos dois lados: nao estoura o
-    teto e sobra margem de minuto para a retentativa. A conta e 2,2 tokens por
-    palavra de narracao (portugues, com acento, custa mais que ingles) mais
-    1.600 para o JSON: nome de campo, descricao visual de cada cena, titulo,
-    legenda e hashtags.
+    Duas medicoes de 09/10/2026, e as duas importam:
+
+    - com max_tokens=8000 fixo, o prompt maior da geracao em partes estourou o
+      teto antes de sair do lugar: "Limit 8000, Requested 8898";
+    - cortar para 2.788 resolveu o estouro e ENCOLHEU o roteiro: o longo caiu
+      de 762 para 670 e 648 palavras. O gpt-oss e modelo de raciocinio e o
+      max_tokens cobre raciocinio MAIS resposta (ver REASONING_EFFORT), entao
+      orcamento apertado trunca o texto.
+
+    Dai a conta ser: tudo o que sobra do teto depois do prompt, com uma margem
+    para a estimativa de token nao passar raspando. Em portugues 3,5
+    caracteres por token e uma aproximacao boa o bastante para isso.
     """
-    if not max_words:
-        return MAX_COMPLETION_TOKENS
-    return max(2000, min(MAX_COMPLETION_TOKENS, int(max_words * 2.2) + 1600))
+    prompt_tokens = len(prompt) / 3.5
+    sobra = int(TPM_GRATUITO - prompt_tokens - MARGEM_TPM)
+    return max(2500, min(MAX_COMPLETION_TOKENS, sobra))
 
 
-def _ask_for_json(client: Groq, model: str, prompt: str,
-                   max_words: int | None = None) -> dict:
+def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
     """Pede o roteiro em JSON e devolve o dict. Ver REASONING_EFFORT: sem ele o
     modo JSON deste modelo falha sempre."""
     params = {
@@ -396,7 +403,7 @@ def _ask_for_json(client: Groq, model: str, prompt: str,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.95,
         "response_format": {"type": "json_object"},
-        "max_tokens": _orcamento_de_resposta(max_words),
+        "max_tokens": _orcamento_de_resposta(prompt),
     }
     if REASONING_EFFORT:
         params["reasoning_effort"] = REASONING_EFFORT
@@ -921,7 +928,7 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
     else:
         model = model or MODEL
         client = Groq(api_key=os.environ["GROQ_API_KEY"])
-        ask_fn = lambda prompt: _ask_for_json(client, model, prompt, max_words)
+        ask_fn = lambda prompt: _ask_for_json(client, model, prompt)
 
     best = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
