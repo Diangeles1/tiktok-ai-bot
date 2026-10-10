@@ -46,6 +46,34 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      # DOMINGO E DO VIDEO LONGO, e a cota de imagem nao da para os dois.
+      #
+      # Cada imagem custa de 250 a 420 neuronios na Cloudflare e a cota
+      # gratuita e de 10.000 por dia. O video de cinco minutos usa ~20 imagens
+      # (50 a 84% da cota) e os tres Shorts usam quase todo o resto. Rodando
+      # junto, um dos dois falha no meio, e falhar no meio e pior que nao
+      # comecar: gasta cota e nao publica nada.
+      #
+      # A escolha de parar os Shorts (e nao o longo) e do dono do canal, em
+      # 09/10/2026: um video longo por semana vale os tres Shorts daquele dia.
+      # Para voltar atras, apague este passo e o cron de domingo em
+      # video-longo.yml.
+      # Termina VERDE no domingo, e nao vermelho: execucao vermelha por motivo
+      # esperado vira ruido, e ruido esconde a falha de verdade no dia em que
+      # ela acontecer.
+      - name: Hoje e dia de video longo?
+        id: calendario
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$(date -u +%u)" = "7" ]; then
+            echo "pular=sim" >> "$GITHUB_OUTPUT"
+            echo "Domingo: hoje sai o video longo (ver video-longo.yml) e os"
+            echo "Shorts nao saem, porque a cota de imagem nao cabe nos dois."
+          else
+            echo "pular=nao" >> "$GITHUB_OUTPUT"
+            echo "Dia de Shorts normal."
+          fi
+
       # O BOT NAO PODE MAIS DEDUZIR A PUBLICACAO PELO RELOGIO.
       #
       # script_gen.current_slot escolhia o horario de posting_hours_utc mais
@@ -84,6 +112,7 @@ jobs:
           echo "publicacao desta execucao: slot $(grep SLOT_ALVO "$GITHUB_ENV" | tail -1)"
 
       - name: Rodar pipeline
+        if: steps.calendario.outputs.pular != 'sim'
         env:
           # sem isso o Python bufferiza a saida (o passo do Actions e um pipe,
           # nao um terminal) e o log so aparece no fim. Se a execucao estourar

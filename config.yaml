@@ -59,6 +59,64 @@ niche: >
 # tema diferente. Precisa casar com os cron em .github/workflows/daily-post.yml.
 posting_hours_utc: [9, 15, 23]
 
+# FORMATO LONGO, escolhido com FORMATO=longo no ambiente (ver load_config).
+#
+# O canal tem dois produtos: o Short vertical de ~50s, tres por dia, e este
+# video de 5 minutos em 16:9, uma vez por semana. Eles compartilham quase tudo
+# (nicho, estilo visual, personagens, regras de roteiro, audio, marca), e por
+# isso o longo e uma SOBREPOSICAO aqui dentro, nao um segundo arquivo: dois
+# arquivos divergem em silencio.
+#
+# Por que 16:9 e nao vertical: decisao do dono em 09/10/2026. Cinco minutos
+# nao e Short (o YouTube define Short como ate 3 minutos, documentacao oficial
+# conferida no mesmo dia), entao este video vive de busca e sugeridos, onde o
+# horizontal e o padrao. O codigo detecta o formato pela TELA e para de marcar
+# "#Shorts" na descricao (ver _e_short em main.py).
+#
+# CUSTO, medido antes de montar: cada imagem custa de 250 a 420 neuronios na
+# Cloudflare e a cota gratuita e de 10.000 por dia. Vinte imagens dao 50 a 84%
+# da cota, entao no dia do video longo NAO saem os tres Shorts. E por isso que
+# ele e semanal e tem workflow proprio.
+formatos:
+  longo:
+    video:
+      width: 1920
+      height: 1080
+    captions:
+      # a tela vertical reservava 420px para a interface do Shorts; em 16:9 nao
+      # existe aquela interface e a legenda pode descer
+      bottom_margin: 110
+    # um horario so, no domingo (ver .github/workflows/video-longo.yml)
+    posting_hours_utc: [21]
+    fase: longo
+    script:
+      # uma categoria so: o video longo conta UMA historia inteira, e as
+      # historias que sustentam cinco minutos sao as de arco completo
+      mistura:
+        - ["longo"]
+      # sem gancho de Short: o formato longo tem abertura propria (abaixo)
+      ganchos_concentrados: []
+      instrucoes_por_categoria:
+        longo: >
+          FORMATO LONGO, de cinco minutos, diferente dos Shorts do canal. Nao e
+          um Short esticado: e a historia INTEIRA, contada com calma.
+          TAMANHO DE CADA CENA, e esta e a parte que mais erra: cada cena tem
+          de 40 a 50 PALAVRAS, o que da 3 ou 4 frases. Uma frase curta por cena
+          e o tamanho do Short, e aqui ficaria com um terco da duracao pedida.
+          Conte as palavras de cada cena antes de passar para a proxima.
+          Abra em no maximo duas frases dizendo de que historia se trata e por
+          que ela ainda importa hoje, sem entregar o desfecho. Depois conte a
+          passagem do comeco ao fim, na ordem em que ela acontece, com o
+          contexto que um Short nao tem espaco para dar: quem era cada pessoa,
+          onde isso acontecia, o que estava em jogo. Deixe a historia respirar.
+          Feche ligando ao dia de quem assiste, no presente.
+          As regras de fidelidade valem igual, e aqui pesam mais, porque ha
+          mais espaco para inventar: conte SO o que a passagem registra, sem
+          criar pessoa, dialogo, numero ou milagre que nao esteja no texto. Se
+          faltar material para cinco minutos, explique mais (o costume da
+          epoca, o significado de uma palavra, o que a passagem NAO diz) em vez
+          de inventar acontecimento.
+
 # Usado apenas no content_mode "cenas".
 scenes:
   # Sufixo de estilo colado em toda imagem de cena. E o que faz as cenas
@@ -214,6 +272,35 @@ fases:
       uma frase curta do que isso significa. Nada de pergunta no fim, nada de
       convite vago. NÃO peca inscricao, curtida nem compartilhamento: isso e
       dito depois, por outra voz.
+  # Fase do FORMATO LONGO (5 minutos em 16:9, semanal). Nao e alternativa as
+  # outras duas: e a fase que o bloco "formatos.longo" seleciona.
+  #
+  # A conta das palavras vem de medicao, nao de estimativa: o Kokoro le cerca
+  # de 2,8 palavras por segundo nesta voz (118 palavras deram 42,3s de
+  # narracao num video real de 08/10/2026). Cinco minutos pedem entao umas 840
+  # palavras, e a faixa abaixo deixa folga dos dois lados.
+  #
+  # 20 cenas dao 15 segundos cada, e o montador ja divide cena longa em dois
+  # planos (SPLIT_MIN_SECONDS em src/video.py), entao sao ~40 cortes em cinco
+  # minutos. Mais cenas que isso estouraria a cota de imagem da Cloudflare, que
+  # e o limite real deste formato.
+  longo:
+    # o modelo nao escreve roteiro longo de uma vez (medido: pedindo 780
+    # palavras ele devolveu 252, 289 e 281). Em duas partes cada chamada fica
+    # dentro do que ele entrega bem. Ver gerar_roteiro_em_partes.
+    roteiro_em_partes: 2
+    # 840 e nao 780: com 780 o teste de 09/10/2026 entregou 762 palavras, que
+    # dao 4,5 minutos. O modelo acompanha o alvo POR PARTE de perto (396 e 366
+    # contra 390 pedidos), entao pedir 420 por parte fecha os cinco minutos.
+    min_narration_words: 840
+    max_narration_words: 980
+    min_scenes: 18
+    max_scenes: 22
+    min_duration_seconds: 0
+    cta: >
+      A ÚLTIMA cena fecha com um convite curto para acompanhar o canal, no
+      maximo uma frase, nascido do assunto da história.
+
   monetizacao:
     # Calibrado com medicao real: a voz Antonio le 2,42 palavras por segundo no
     # ritmo padrao, o que dava 64s com 155 palavras. Com tts_rate em +8% a
@@ -566,6 +653,34 @@ script:
       - "1 Pedro 5, versículo 7 — lance sobre ele toda a sua ansiedade: para quem carrega preocupacao sozinho"
       - "Salmo 37, versículo 5 — entrega o teu caminho ao Senhor: para quem não sabe que passo dar"
       - "1 Coríntios 13, versículos 4 a 7 — o amor e paciente: para quem está brigado com alguem de casa"
+    # Temas do FORMATO LONGO. Lista propria, e isto tem motivo medido: em
+    # 09/10/2026 o roteiro de cinco minutos sobre "a sogra de Pedro curada
+    # da febre" (Lucas 4, DOIS versículos) saiu com 670 palavras, enquanto
+    # o de Neemias reconstruindo os muros (capítulos 2 a 4) saiu com 762.
+    # Não há 840 palavras honestas numa cura de dois versículos, e esticar
+    # seria inventar, que é o oposto do que este canal faz. Aqui só entram
+    # histórias de arco inteiro, com vários capítulos de material.
+    longo:
+      - "José vendido pelos irmãos até se tornar governador do Egito"
+      - "Noé e o dilúvio, da construção da arca à aliança do arco-íris"
+      - "Moisés e as dez pragas, do confronto com o faraó à primeira Páscoa"
+      - "A travessia do Mar Vermelho e os primeiros dias no deserto"
+      - "Davi e Golias, e a perseguição de Saul que veio depois"
+      - "Jó: a perda de tudo, os amigos que acusaram e a resposta de Deus"
+      - "Daniel na cova dos leões e os sonhos que ele interpretou na Babilônia"
+      - "Jonas, a fuga, o grande peixe e a cidade de Nínive"
+      - "Ester arriscando a vida para salvar o próprio povo"
+      - "Rute e Noemi, da fome em Moabe à colheita em Belém"
+      - "Neemias reconstruindo os muros de Jerusalém sob ameaça"
+      - "Elias no monte Carmelo e a fuga até o monte Horebe"
+      - "A Paixão: da última ceia à manhã da ressurreição"
+      - "Paulo: a estrada de Damasco, as viagens e o naufrágio"
+      - "Pedro: da negação na madrugada ao discurso de Pentecostes"
+      - "Abraão: o chamado, a promessa que demorou e o monte Moriá"
+      - "Sansão, a força, a traição e o último gesto no templo"
+      - "Salomão: o pedido de sabedoria e a construção do templo"
+      - "A criação e a queda, do jardim à promessa de um remédio"
+      - "Gideão e os trezentos homens contra o exército de Midiã"
     personagem:
       # --- Jesus: encontros ---
       - "Zaqueu subindo na arvore para ver de longe"

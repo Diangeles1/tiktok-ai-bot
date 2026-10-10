@@ -366,7 +366,29 @@ def _rate_limit_wait(exc: Exception, attempt: int) -> float:
     return min(60.0, backoff)
 
 
-def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
+def _orcamento_de_resposta(max_words: int | None) -> int:
+    """Quantos tokens reservar para a resposta, pelo tamanho do roteiro pedido.
+
+    POR QUE NAO O VALOR FIXO: a Groq gratuita tem teto de 8.000 TOKENS POR
+    MINUTO, e ela conta o prompt MAIS o max_tokens reservado. Com
+    max_tokens=8000 fixo, qualquer prompt um pouco maior estoura o teto antes
+    de sair do lugar. Aconteceu em 09/10/2026 ao montar o roteiro longo em
+    partes, que tem prompt maior por carregar o contexto da parte anterior:
+    "Limit 8000, Requested 8898".
+
+    Reservar o que a resposta precisa resolve dos dois lados: nao estoura o
+    teto e sobra margem de minuto para a retentativa. A conta e 2,2 tokens por
+    palavra de narracao (portugues, com acento, custa mais que ingles) mais
+    1.600 para o JSON: nome de campo, descricao visual de cada cena, titulo,
+    legenda e hashtags.
+    """
+    if not max_words:
+        return MAX_COMPLETION_TOKENS
+    return max(2000, min(MAX_COMPLETION_TOKENS, int(max_words * 2.2) + 1600))
+
+
+def _ask_for_json(client: Groq, model: str, prompt: str,
+                   max_words: int | None = None) -> dict:
     """Pede o roteiro em JSON e devolve o dict. Ver REASONING_EFFORT: sem ele o
     modo JSON deste modelo falha sempre."""
     params = {
@@ -374,7 +396,7 @@ def _ask_for_json(client: Groq, model: str, prompt: str) -> dict:
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.95,
         "response_format": {"type": "json_object"},
-        "max_tokens": MAX_COMPLETION_TOKENS,
+        "max_tokens": _orcamento_de_resposta(max_words),
     }
     if REASONING_EFFORT:
         params["reasoning_effort"] = REASONING_EFFORT
@@ -899,7 +921,7 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
     else:
         model = model or MODEL
         client = Groq(api_key=os.environ["GROQ_API_KEY"])
-        ask_fn = lambda prompt: _ask_for_json(client, model, prompt)
+        ask_fn = lambda prompt: _ask_for_json(client, model, prompt, max_words)
 
     best = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -964,6 +986,90 @@ def generate_scene_script(niche: str, language: str, seed_topic: str | None = No
         print(f"  [script] AVISO: seguindo com o fecho quebrado "
               f"({'; '.join(fecho_final)}) depois de {MAX_ATTEMPTS} tentativas.")
     return best
+
+
+def gerar_roteiro_em_partes(partes: int, **kwargs) -> dict:
+    """Monta um roteiro longo pedindo o texto em PARTES e emendando.
+
+    POR QUE: o modelo nao escreve roteiro longo de uma vez. Medido em
+    09/10/2026, pedindo 780 palavras para o formato de cinco minutos, o
+    gpt-oss devolveu 252, 289 e 281 nas tres tentativas: ele acerta o NUMERO de
+    cenas e escreve uma frase curta em cada. Dizer o tamanho de cada cena ("40
+    a 50 palavras") levou para 498, 426 e 299 — melhor, e ainda longe.
+
+    Pedir metade de cada vez resolve porque cada chamada fica dentro do que o
+    modelo entrega bem. A parte 2 recebe o fim da parte 1 para continuar a
+    historia de onde parou, em vez de recomecar.
+
+    Os campos que descrevem o video inteiro (passagem, clima, titulo, legenda)
+    vem da PARTE 1: eles valem para a historia toda, e a parte 2 so acrescenta
+    cenas.
+    """
+    if partes < 2:
+        return generate_scene_script(**kwargs)
+
+    min_cenas = kwargs.pop("min_scenes", MIN_SCENES)
+    max_cenas = kwargs.pop("max_scenes", MAX_SCENES)
+    min_palavras = kwargs.pop("min_words", MIN_NARRATION_WORDS)
+    max_palavras = kwargs.pop("max_words", 220)
+    instrucao = kwargs.pop("instrucao_categoria", None) or ""
+    cta = kwargs.pop("cta", None)
+
+    por_parte_cenas = max(2, round(min_cenas / partes))
+    por_parte_palavras = max(60, round(min_palavras / partes))
+
+    juntas: list[dict] = []
+    primeiro: dict | None = None
+    for i in range(1, partes + 1):
+        ultima = i == partes
+        contexto = ""
+        if juntas:
+            # so o fim da parte anterior: mandar tudo gastaria o orcamento de
+            # token com texto que o modelo nao precisa reescrever
+            anterior = " ".join(c["narration"] for c in juntas[-3:])
+            contexto = (
+                f"\nA HISTORIA JA COMECOU. Estas foram as ultimas cenas da parte "
+                f"anterior:\n\"{anterior}\"\n"
+                f"Continue EXATAMENTE de onde parou, sem repetir o que ja foi "
+                f"contado e sem reapresentar a historia. Nao abra de novo: o "
+                f"espectador ja esta assistindo ha alguns minutos.\n"
+            )
+
+        papel = (
+            f"\nESTA E A PARTE {i} DE {partes} do roteiro. Escreva SO esta parte: "
+            f"{por_parte_cenas} cenas, somando cerca de {por_parte_palavras} "
+            f"palavras.\n"
+        )
+        if not ultima:
+            papel += (
+                "Ela NAO termina a historia e NAO tem fecho nem conclusao: para "
+                "no meio do acontecimento, porque a proxima parte continua.\n"
+            )
+        else:
+            papel += "Esta parte FECHA a historia e leva o desfecho.\n"
+
+        parte = generate_scene_script(
+            min_scenes=por_parte_cenas, max_scenes=por_parte_cenas + 2,
+            min_words=por_parte_palavras, max_words=por_parte_palavras + 120,
+            cta=cta if ultima else None,
+            instrucao_categoria=instrucao + papel + contexto,
+            **kwargs,
+        )
+        if primeiro is None:
+            primeiro = parte
+        juntas.extend(parte["scenes"])
+        print(f"  [script] parte {i}/{partes}: {scene_word_count(parte)} palavras "
+              f"em {len(parte['scenes'])} cenas")
+
+    inteiro = dict(primeiro or {})
+    inteiro["scenes"] = juntas[:max_cenas]
+    total = scene_word_count(inteiro)
+    print(f"  [script] roteiro longo: {total} palavras em "
+          f"{len(inteiro['scenes'])} cenas (minimo {min_palavras})")
+    if total < min_palavras:
+        print(f"  [script] AVISO: {min_palavras - total} palavras abaixo do alvo; "
+              f"o video vai sair mais curto que o planejado.")
+    return inteiro
 
 
 def _request_script(client: Groq, model: str, character_name: str, character_vibe: str,

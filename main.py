@@ -13,6 +13,7 @@ Uso:
 import argparse
 import datetime
 import json
+import functools
 import os
 import sys
 
@@ -44,9 +45,50 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
+def _sobrepor(base: dict, mudancas: dict) -> dict:
+    """Aplica as mudancas sobre a base, descendo nos dicionarios aninhados.
+
+    Lista e valor simples sao SUBSTITUIDOS, nao somados: quando o formato longo
+    diz posting_hours_utc [21], ele quer aquele horario, e nao os tres do
+    formato curto mais um.
+    """
+    saida = dict(base)
+    for chave, valor in mudancas.items():
+        if isinstance(valor, dict) and isinstance(saida.get(chave), dict):
+            saida[chave] = _sobrepor(saida[chave], valor)
+        else:
+            saida[chave] = valor
+    return saida
+
+
 def load_config() -> dict:
+    """Le o config e aplica a sobreposicao do formato, se houver.
+
+    O canal tem dois formatos (Short vertical diario e video longo 16:9
+    semanal), e eles compartilham quase tudo: nicho, estilo visual, personagens,
+    regras de roteiro, audio, marca. Duplicar o config em dois arquivos
+    colocaria os dois para divergir em silencio, que e o mesmo defeito que ja
+    deu trabalho aqui com constantes espalhadas em arquivos diferentes.
+
+    Entao existe UM config, e o formato longo e uma sobreposicao dentro dele
+    (bloco "formatos"), escolhida por FORMATO no ambiente. Sem FORMATO, nada
+    muda e o comportamento e o de sempre.
+    """
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+
+    nome = os.environ.get("FORMATO", "").strip()
+    if not nome:
+        return cfg
+
+    formatos = cfg.get("formatos") or {}
+    if nome not in formatos:
+        raise SystemExit(
+            f"FORMATO='{nome}' nao existe no config. "
+            f"Disponiveis: {', '.join(sorted(formatos)) or 'nenhum'}."
+        )
+    print(f"  formato: {nome}")
+    return _sobrepor(cfg, formatos[nome])
 
 
 def _horario_utc(cfg: dict, dia: datetime.date, slot: int) -> datetime.datetime | None:
@@ -134,7 +176,12 @@ def _build_scene_mode(cfg: dict, run_dir: str, width: int, height: int) -> tuple
           f"tipo: {categoria or 'livre'}, tema: {seed_topic or 'livre'}, "
           f"gancho: {hook['name'] if hook else ('formato ' + categoria if instrucao_categoria else 'livre')}, "
           f"arco: {arc['name'] if arc else 'livre'}, fase: {phase_name})")
-    script = script_gen.generate_scene_script(
+    # roteiro longo vem em partes: o modelo nao escreve 800 palavras de uma vez
+    # (ver gerar_roteiro_em_partes em src/script_gen.py)
+    partes = int(phase.get("roteiro_em_partes", 1) or 1)
+    gerar = (script_gen.generate_scene_script if partes < 2
+             else functools.partial(script_gen.gerar_roteiro_em_partes, partes))
+    script = gerar(
         niche=cfg["niche"],
         language=cfg["language"],
         seed_topic=seed_topic,
@@ -441,7 +488,8 @@ def publish_run(run_dir: str, cfg: dict, platforms: list[str] | None = None,
                 description = (meta.get("descricao_youtube")
                                or f"{meta['titulo_youtube']}\n\n{tag_line}".strip())
                 outcome = _post_to_youtube(video_path, meta["titulo_youtube"], description,
-                                           platform_cfg, thumbnail_path, publish_at)
+                                           platform_cfg, thumbnail_path, publish_at,
+                                           e_short=_e_short(cfg))
             results[platform] = {"ok": True, **outcome}
         except Exception as exc:
             print(f"  [{platform}] FALHOU: {exc}")
@@ -501,9 +549,24 @@ def _post_to_tiktok(video_path: str, title: str, tiktok_cfg: dict,
     return outcome
 
 
+def _e_short(cfg: dict) -> bool:
+    """Este video e um Short, ou um video comum?
+
+    Decidido pelo FORMATO DA TELA, e nao por um campo que alguem pode esquecer
+    de trocar junto: o YouTube chama de Short o video vertical de ate 3 minutos
+    (documentacao oficial, conferida em 09/10/2026). O canal passou a ter dois
+    formatos, e o longo e 16:9, entao a altura maior que a largura separa os
+    dois sem ambiguidade. A duracao nao entra aqui porque o formato vertical do
+    canal tem sempre menos de um minuto.
+    """
+    video = cfg.get("video", {})
+    return int(video.get("height", 1920)) > int(video.get("width", 1080))
+
+
 def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg: dict,
                       thumbnail_path: str | None = None,
-                      publish_at: str | None = None) -> dict:
+                      publish_at: str | None = None,
+                      e_short: bool = True) -> dict:
     print("  [youtube] publicando..." if not publish_at
           else f"  [youtube] enviando com publicacao marcada para {publish_at}...")
     result = youtube_api.upload_short(
@@ -519,8 +582,12 @@ def _post_to_youtube(video_path: str, title: str, description: str, youtube_cfg:
         thumbnail_path=thumbnail_path,
         publish_at=publish_at,
         synthetic=youtube_cfg.get("conteudo_sintetico", True),
+        marcar_shorts=e_short,
     )
-    url = f"https://youtube.com/shorts/{result['id']}"
+    # a URL de Short nao serve para video comum: ela redireciona, mas o link
+    # que vai para o historico e para o painel tem que ser o do formato certo
+    url = (f"https://youtube.com/shorts/{result['id']}" if e_short
+           else f"https://youtube.com/watch?v={result['id']}")
     if publish_at:
         print(f"  [youtube] video no ar as {publish_at} (privado ate lá): {url}")
     else:
