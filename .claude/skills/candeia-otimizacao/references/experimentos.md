@@ -131,6 +131,62 @@ EOF
 
 ## Experimentos concluídos
 
+### 2026-10-10 segundo formato: vídeo de 5 minutos em 16:9, semanal
+
+Pedido do dono, com duas decisões dele: um por semana sem Shorts naquele dia
+(cabe na cota gratuita) e tela horizontal.
+
+**Cinco minutos não é Short.** O YouTube define Short como até 3 minutos
+(documentação oficial). O código passou a decidir pela TELA (`altura >
+largura`), não por um campo que alguém esquece de trocar: só marca `#Shorts`
+quando é Short, e a URL sai `watch?v=` no longo.
+
+**Um config, dois produtos.** O longo é uma sobreposição dentro do próprio
+`config.yaml` (bloco `formatos`), escolhida por `FORMATO=longo`. Dois arquivos
+divergiriam em silêncio — o mesmo defeito das constantes espalhadas.
+
+**O modelo não escreve roteiro longo de uma vez.** Pedindo 780 palavras, o
+gpt-oss devolveu 252, 289 e 281: acerta o número de cenas e escreve uma frase
+curta em cada. Em duas partes, com a segunda recebendo o fim da primeira,
+chegou a 847 palavras (5,0 min). A Gemini, saída natural, respondeu 503.
+
+**O erro que me custou três testes, e vale registrar inteiro:**
+
+Ao consertar um estouro do limite da Groq ("Limit 8000, Requested 8898"), troquei
+`max_tokens` de 8000 fixo por um valor calculado do número de palavras pedido,
+o que deu 2.788 por parte. O roteiro encolheu, e eu atribuí isso ao TEMA:
+criei uma lista de 20 histórias de arco inteiro argumentando que "não há 840
+palavras honestas numa cura de dois versículos".
+
+O teste seguinte derrubou: José vendido pelos irmãos (Gênesis 37 a 45) deu
+**648 palavras**, menos que a cura de dois versículos. Mesmo tema, só mudando o
+orçamento, depois do conserto certo: **847**.
+
+| orçamento de token | palavras | duração |
+|---|---|---|
+| 8.000 fixo | 762 | 4,5 min |
+| 2.788 (a regressão) | 648 | 3,9 min |
+| calculado do prompt | **847** | **5,0 min** |
+
+O gpt-oss é modelo de raciocínio e `max_tokens` cobre raciocínio **mais**
+resposta — está escrito no comentário de `REASONING_EFFORT` no mesmo arquivo, e
+eu não liguei os dois. O conserto certo calcula o orçamento a partir do
+**prompt**, que é onde o limite mora: a Groq conta prompt + `max_tokens` contra
+o teto de 8.000 por minuto.
+
+**O estrago que ia para produção sem aparecer:** os Shorts diários tinham caído
+para 2.000 tokens de orçamento. Conferido depois: 127 e 129 palavras, dentro da
+faixa, e o primeiro em 6 segundos sem retentativa.
+
+**Lição, e é a mesma de duas vezes nesta semana:** eu expliquei um número com a
+primeira hipótese plausível (o tema) em vez de com a variável que eu mesmo
+tinha acabado de mudar. Antes de culpar o conteúdo, conferir o que eu toquei.
+
+**O que falta antes de ligar o cron:** um render completo em 16:9. Legenda,
+marca d'água e enquadramento foram calibrados para vertical
+(`ALVO_VERTICAL_PESSOA` mira o terço superior). O gerador de imagem em 16:9 já
+foi verificado com uma imagem real, 1920×1080, estilo do canal mantido.
+
 ### 2026-10-08 a publicacao da manha nunca saiu, e a da noite saia dobrada
 
 Achado ao analisar o canal, e **não era questão de conteúdo**: era defeito de
